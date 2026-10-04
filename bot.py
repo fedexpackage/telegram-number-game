@@ -43,10 +43,10 @@ def verify_telegram_data(init_data):
         )
 
         secret_key = hmac.new(
-            b"WebAppData",
-            TOKEN.encode(),
-            hashlib.sha256
-        ).digest()
+    TOKEN.encode(),
+    b"WebAppData",
+    hashlib.sha256
+).digest()
 
         calculated_hash = hmac.new(
             secret_key,
