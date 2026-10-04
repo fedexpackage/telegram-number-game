@@ -71,7 +71,11 @@ def game():
     try:
         data = request.get_json(force=True)
 
-        init_data = data.get("initData", "")
+        init_data = data.get("initData", "")if not init_data:
+    return jsonify({
+        "success": False,
+        "error": "DONNEES TELEGRAM ABSENTES"
+    }), 401
         telegram_data = verify_telegram_data(init_data)
 
         if not telegram_data:
