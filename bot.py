@@ -5,6 +5,7 @@ import hmac
 import hashlib
 import time
 import urllib.request
+from urllib.parse import parse_qsl
 from flask import Flask, request, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -28,10 +29,7 @@ def home():
 
 def verify_telegram_data(init_data):
     try:
-        data = dict(
-            item.split("=", 1)
-            for item in init_data.split("&")
-            if "=" in item
+        data = dict(parse_qsl(init_data, keep_blank_values=True))
         )
 
         received_hash = data.pop("hash", None)
