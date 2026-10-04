@@ -35,7 +35,7 @@ def verify_telegram_data(init_data):
         received_hash = data.pop("hash", None)
 
         if not received_hash:
-            return None
+    raise ValueError("HASH TELEGRAM ABSENT")
 
         data_check_string = "\n".join(
             f"{key}={data[key]}"
@@ -55,15 +55,15 @@ def verify_telegram_data(init_data):
         ).hexdigest()
 
         if not hmac.compare_digest(calculated_hash, received_hash):
-            return None
+    raise ValueError("SIGNATURE TELEGRAM INCORRECTE")
 
         if time.time() - int(data.get("auth_date", 0)) > 86400:
-            return None
+    raise ValueError("SESSION TELEGRAM EXPIRÉE")
 
         return data
 
-    except Exception:
-        return None
+    except Exception as error:
+    raise error
 
 
 @app.route("/api/game", methods=["POST"])
