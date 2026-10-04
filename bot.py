@@ -96,10 +96,10 @@ def verify_telegram_data(init_data):
         # clé HMAC = token du bot
         # message HMAC = "WebAppData"
         secret_key = hmac.new(
-            TOKEN.encode("utf-8"),
-            b"WebAppData",
-            hashlib.sha256
-        ).digest()
+    b"WebAppData",
+    TOKEN.encode("utf-8"),
+    hashlib.sha256
+).digest()
 
         calculated_hash = hmac.new(
             secret_key,
