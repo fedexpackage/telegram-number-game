@@ -1,239 +1,445 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jeu</title>
 
-  <title>Jeu de numéros</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-  <!-- Telegram Mini App -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #f4f4f4;
+    margin: 0;
+    padding: 20px;
+    text-align: center;
+}
 
-  <style>
-    * {
-      box-sizing: border-box;
-    }
+.container {
+    max-width: 500px;
+    margin: auto;
+    background: white;
+    padding: 25px;
+    border-radius: 15px;
+}
 
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f1f3f5;
-      color: #222;
-      text-align: center;
-    }
+h1 {
+    margin-bottom: 10px;
+}
 
-    .container {
-      max-width: 450px;
-      margin: auto;
-      padding: 25px 18px;
-    }
+input, select {
+    width: 100%;
+    padding: 13px;
+    margin: 7px 0;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 16px;
+}
 
-    h1 {
-      margin-bottom: 8px;
-      font-size: 27px;
-    }
+button {
+    border: none;
+    border-radius: 8px;
+    padding: 13px 18px;
+    font-size: 16px;
+    cursor: pointer;
+}
 
-    .subtitle {
-      color: #666;
-      margin-bottom: 25px;
-    }
+.primary {
+    width: 100%;
+    background: #0088cc;
+    color: white;
+    margin-top: 10px;
+}
 
-    .numbers {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-    }
+#game {
+    display: none;
+}
 
-    .number {
-      border: none;
-      border-radius: 15px;
-      padding: 20px 5px;
-      font-size: 22px;
-      font-weight: bold;
-      background: white;
-      box-shadow: 0 3px 10px rgba(0,0,0,0.12);
-      cursor: pointer;
-    }
+.numbers {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 20px;
+}
 
-    .number:active {
-      transform: scale(0.95);
-    }
+.number {
+    background: #0088cc;
+    color: white;
+    font-size: 22px;
+    height: 65px;
+}
 
-    #result {
-      display: none;
-      margin-top: 25px;
-      padding: 25px 15px;
-      background: white;
-      border-radius: 18px;
-      box-shadow: 0 3px 15px rgba(0,0,0,0.12);
-    }
+.number:disabled {
+    opacity: 0.5;
+}
 
-    #animation {
-      font-size: 22px;
-      font-weight: bold;
-      margin: 15px 0;
-    }
+#message {
+    margin-top: 20px;
+    font-weight: bold;
+}
 
-    #finalResult {
-      font-size: 28px;
-      font-weight: bold;
-      margin-top: 15px;
-    }
+#administration {
+    display: none;
+    margin-top: 20px;
+}
 
-    .success {
-      color: #16803c;
-    }
-
-    .failure {
-      color: #d62828;
-    }
-
-    #restart {
-      margin-top: 20px;
-      padding: 13px 25px;
-      border: none;
-      border-radius: 10px;
-      background: #222;
-      color: white;
-      font-size: 16px;
-      cursor: pointer;
-    }
-  </style>
+.admin {
+    background: #222;
+    color: white;
+}
+</style>
 </head>
 
 <body>
 
-  <div class="container">
+<div class="container">
 
-    <h1>🎯 Choisissez un numéro</h1>
+    <!-- INSCRIPTION -->
+    <div id="registration">
 
-    <div class="subtitle">
-      Sélectionnez un numéro pour lancer le tirage.
+        <h1>🎮 Bienvenue</h1>
+
+        <p>Veuillez remplir vos informations avant de commencer.</p>
+
+        <input id="nom" type="text"
+               placeholder="Nom et prénom comme sur la pièce d'identité">
+
+        <input id="pays" type="text"
+               placeholder="Pays de résidence">
+
+        <input id="ville" type="text"
+               placeholder="Ville de résidence">
+
+        <input id="adresse" type="text"
+               placeholder="Adresse de résidence">
+
+        <input id="telephone" type="tel"
+               placeholder="Numéro de téléphone">
+
+        <button class="primary" id="registerButton">
+            Continuer vers le jeu
+        </button>
+
+        <div id="registerMessage"></div>
+
     </div>
 
-    <div class="numbers" id="numbers"></div>
 
-    <div id="result">
+    <!-- JEU -->
+    <div id="game">
 
-      <div>
-        Numéro choisi :
-        <strong id="chosenNumber"></strong>
-      </div>
+        <h1>🎯 Choisissez un numéro</h1>
 
-      <div id="animation">
-        🔄 Tirage en cours...
-      </div>
+        <p id="attemptText">
+            Vous avez 3 tentatives.
+        </p>
 
-      <div id="finalResult"></div>
+        <div class="numbers">
 
-      <button id="restart" onclick="restartGame()">
-        🔁 Recommencer
-      </button>
+            <button class="number" data-number="1">1</button>
+            <button class="number" data-number="2">2</button>
+            <button class="number" data-number="3">3</button>
+            <button class="number" data-number="4">4</button>
+            <button class="number" data-number="5">5</button>
+            <button class="number" data-number="6">6</button>
+            <button class="number" data-number="7">7</button>
+            <button class="number" data-number="8">8</button>
+            <button class="number" data-number="9">9</button>
+            <button class="number" data-number="10">10</button>
+            <button class="number" data-number="11">11</button>
+            <button class="number" data-number="12">12</button>
+
+        </div>
+
+        <div id="message"></div>
+
+        <div id="administration">
+            <p>🎉 Félicitations ! Vous avez gagné.</p>
+
+            <button class="admin" id="adminButton">
+                Contacter l'Administration
+            </button>
+        </div>
 
     </div>
 
-  </div>
+</div>
 
-  <script>
 
-    // Ouverture de Telegram Mini App
-    if (window.Telegram && Telegram.WebApp) {
-      Telegram.WebApp.ready();
-      Telegram.WebApp.expand();
+<script>
+
+const RENDER_URL = "https://telegram-number-game-4.onrender.com";
+
+const tg = window.Telegram.WebApp;
+
+tg.ready();
+tg.expand();
+
+const initData = tg.initData;
+
+const registration = document.getElementById("registration");
+const game = document.getElementById("game");
+
+const registerButton =
+    document.getElementById("registerButton");
+
+const registerMessage =
+    document.getElementById("registerMessage");
+
+const message =
+    document.getElementById("message");
+
+const attemptText =
+    document.getElementById("attemptText");
+
+const administration =
+    document.getElementById("administration");
+
+const adminButton =
+    document.getElementById("adminButton");
+
+let attempts = 0;
+let finished = false;
+
+
+/* ==========================
+   ENVOI AU SERVEUR RENDER
+   ========================== */
+
+async function sendToServer(data) {
+
+    const response = await fetch(
+        RENDER_URL + "/api/game",
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                ...data,
+                initData: initData
+            })
+        }
+    );
+
+    return await response.json();
+}
+
+
+/* ==========================
+   INSCRIPTION
+   ========================== */
+
+registerButton.addEventListener("click", async function() {
+
+    const nom =
+        document.getElementById("nom").value.trim();
+
+    const pays =
+        document.getElementById("pays").value.trim();
+
+    const ville =
+        document.getElementById("ville").value.trim();
+
+    const adresse =
+        document.getElementById("adresse").value.trim();
+
+    const telephone =
+        document.getElementById("telephone").value.trim();
+
+
+    if (!nom || !pays || !ville || !adresse || !telephone) {
+
+        registerMessage.textContent =
+            "Veuillez remplir tous les champs.";
+
+        return;
     }
 
-    const numbersContainer = document.getElementById("numbers");
-    const resultBox = document.getElementById("result");
-    const chosenNumber = document.getElementById("chosenNumber");
-    const animation = document.getElementById("animation");
-    const finalResult = document.getElementById("finalResult");
 
-    // Création des 12 numéros
-    for (let i = 1; i <= 12; i++) {
+    registerButton.disabled = true;
 
-      const button = document.createElement("button");
+    registerMessage.textContent =
+        "Enregistrement en cours...";
 
-      button.className = "number";
-      button.textContent = String(i).padStart(2, "0");
 
-      button.onclick = function() {
-        startGame(i);
-      };
+    try {
 
-      numbersContainer.appendChild(button);
-    }
+        const result = await sendToServer({
 
-    function startGame(number) {
+            action: "register",
 
-      // Empêche plusieurs clics
-      document.querySelectorAll(".number").forEach(button => {
-        button.disabled = true;
-      });
+            nom: nom,
+            pays: pays,
+            ville: ville,
+            adresse: adresse,
+            telephone: telephone
 
-      resultBox.style.display = "block";
+        });
 
-      chosenNumber.textContent =
-        String(number).padStart(2, "0");
 
-      finalResult.textContent = "";
+        if (!result.success) {
 
-      let dots = 0;
+            registerMessage.textContent =
+                result.error || "Une erreur est survenue.";
 
-      const loading = setInterval(() => {
+            registerButton.disabled = false;
 
-        dots++;
-
-        if (dots > 3) {
-          dots = 1;
+            return;
         }
 
-        animation.textContent =
-          "🔄 Tirage en cours" + ".".repeat(dots);
 
-      }, 400);
+        registration.style.display = "none";
+        game.style.display = "block";
 
-      // Résultat aléatoire après 3 secondes
-      setTimeout(() => {
+    } catch (error) {
 
-        clearInterval(loading);
+        registerMessage.textContent =
+            "Impossible de contacter le serveur.";
 
-        const success = Math.random() < 0.5;
+        registerButton.disabled = false;
+    }
 
-        if (success) {
+});
 
-          animation.textContent = "🎯 Tirage terminé";
 
-          finalResult.textContent = "✅ SUCCÈS";
-          finalResult.className = "success";
+/* ==========================
+   JEU
+   ========================== */
 
-        } else {
+document.querySelectorAll(".number")
+.forEach(function(button) {
 
-          animation.textContent = "🎯 Tirage terminé";
+    button.addEventListener("click", async function() {
 
-          finalResult.textContent = "❌ ÉCHEC";
-          finalResult.className = "failure";
+        if (finished) {
+            return;
         }
 
-      }, 3000);
-    }
+        document.querySelectorAll(".number")
+        .forEach(function(btn) {
+            btn.disabled = true;
+        });
 
-    function restartGame() {
 
-      resultBox.style.display = "none";
+        const numero = button.dataset.number;
 
-      finalResult.textContent = "";
 
-      document.querySelectorAll(".number").forEach(button => {
-        button.disabled = false;
-      });
+        message.textContent =
+            "Vérification en cours...";
 
-      window.scrollTo({
-        top: 0,
-        behavior: "smooth"
-      });
-    }
 
-  </script>
+        try {
+
+            const result = await sendToServer({
+
+                action: "play",
+
+                numero: numero
+
+            });
+
+
+            if (!result.success) {
+
+                message.textContent =
+                    result.message ||
+                    result.error ||
+                    "Une erreur est survenue.";
+
+                if (result.blocked) {
+                    finished = true;
+                }
+
+                return;
+            }
+
+
+            attempts++;
+
+
+            if (result.gagne) {
+
+                finished = true;
+
+                message.textContent =
+                    "🎉 FÉLICITATIONS ! Vous avez gagné !";
+
+                administration.style.display =
+                    "block";
+
+                return;
+            }
+
+
+            if (result.perdu) {
+
+                finished = true;
+
+                message.textContent =
+                    "❌ Vous avez utilisé vos 3 tentatives. Vous avez perdu.";
+
+                return;
+            }
+
+
+            const remaining =
+                result.tentatives_restantes;
+
+            message.textContent =
+                "❌ Échec. Il vous reste " +
+                remaining +
+                " tentative(s).";
+
+
+            attemptText.textContent =
+                "Tentative " +
+                (attempts + 1) +
+                " sur 3";
+
+
+            document.querySelectorAll(".number")
+            .forEach(function(btn) {
+
+                btn.disabled = false;
+
+            });
+
+
+        } catch (error) {
+
+            message.textContent =
+                "Erreur de connexion au serveur.";
+
+            document.querySelectorAll(".number")
+            .forEach(function(btn) {
+
+                btn.disabled = false;
+
+            });
+
+        }
+
+    });
+
+});
+
+
+/* ==========================
+   ADMINISTRATION
+   ========================== */
+
+adminButton.addEventListener("click", function() {
+
+    alert(
+        "Veuillez contacter l'Administration pour connaître la procédure de récupération de votre gain."
+    );
+
+});
+
+</script>
 
 </body>
 </html>
