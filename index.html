@@ -1,1 +1,239 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+  <title>Jeu de numéros</title>
+
+  <!-- Telegram Mini App -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f1f3f5;
+      color: #222;
+      text-align: center;
+    }
+
+    .container {
+      max-width: 450px;
+      margin: auto;
+      padding: 25px 18px;
+    }
+
+    h1 {
+      margin-bottom: 8px;
+      font-size: 27px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 25px;
+    }
+
+    .numbers {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .number {
+      border: none;
+      border-radius: 15px;
+      padding: 20px 5px;
+      font-size: 22px;
+      font-weight: bold;
+      background: white;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+      cursor: pointer;
+    }
+
+    .number:active {
+      transform: scale(0.95);
+    }
+
+    #result {
+      display: none;
+      margin-top: 25px;
+      padding: 25px 15px;
+      background: white;
+      border-radius: 18px;
+      box-shadow: 0 3px 15px rgba(0,0,0,0.12);
+    }
+
+    #animation {
+      font-size: 22px;
+      font-weight: bold;
+      margin: 15px 0;
+    }
+
+    #finalResult {
+      font-size: 28px;
+      font-weight: bold;
+      margin-top: 15px;
+    }
+
+    .success {
+      color: #16803c;
+    }
+
+    .failure {
+      color: #d62828;
+    }
+
+    #restart {
+      margin-top: 20px;
+      padding: 13px 25px;
+      border: none;
+      border-radius: 10px;
+      background: #222;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+
+    <h1>🎯 Choisissez un numéro</h1>
+
+    <div class="subtitle">
+      Sélectionnez un numéro pour lancer le tirage.
+    </div>
+
+    <div class="numbers" id="numbers"></div>
+
+    <div id="result">
+
+      <div>
+        Numéro choisi :
+        <strong id="chosenNumber"></strong>
+      </div>
+
+      <div id="animation">
+        🔄 Tirage en cours...
+      </div>
+
+      <div id="finalResult"></div>
+
+      <button id="restart" onclick="restartGame()">
+        🔁 Recommencer
+      </button>
+
+    </div>
+
+  </div>
+
+  <script>
+
+    // Ouverture de Telegram Mini App
+    if (window.Telegram && Telegram.WebApp) {
+      Telegram.WebApp.ready();
+      Telegram.WebApp.expand();
+    }
+
+    const numbersContainer = document.getElementById("numbers");
+    const resultBox = document.getElementById("result");
+    const chosenNumber = document.getElementById("chosenNumber");
+    const animation = document.getElementById("animation");
+    const finalResult = document.getElementById("finalResult");
+
+    // Création des 12 numéros
+    for (let i = 1; i <= 12; i++) {
+
+      const button = document.createElement("button");
+
+      button.className = "number";
+      button.textContent = String(i).padStart(2, "0");
+
+      button.onclick = function() {
+        startGame(i);
+      };
+
+      numbersContainer.appendChild(button);
+    }
+
+    function startGame(number) {
+
+      // Empêche plusieurs clics
+      document.querySelectorAll(".number").forEach(button => {
+        button.disabled = true;
+      });
+
+      resultBox.style.display = "block";
+
+      chosenNumber.textContent =
+        String(number).padStart(2, "0");
+
+      finalResult.textContent = "";
+
+      let dots = 0;
+
+      const loading = setInterval(() => {
+
+        dots++;
+
+        if (dots > 3) {
+          dots = 1;
+        }
+
+        animation.textContent =
+          "🔄 Tirage en cours" + ".".repeat(dots);
+
+      }, 400);
+
+      // Résultat aléatoire après 3 secondes
+      setTimeout(() => {
+
+        clearInterval(loading);
+
+        const success = Math.random() < 0.5;
+
+        if (success) {
+
+          animation.textContent = "🎯 Tirage terminé";
+
+          finalResult.textContent = "✅ SUCCÈS";
+          finalResult.className = "success";
+
+        } else {
+
+          animation.textContent = "🎯 Tirage terminé";
+
+          finalResult.textContent = "❌ ÉCHEC";
+          finalResult.className = "failure";
+        }
+
+      }, 3000);
+    }
+
+    function restartGame() {
+
+      resultBox.style.display = "none";
+
+      finalResult.textContent = "";
+
+      document.querySelectorAll(".number").forEach(button => {
+        button.disabled = false;
+      });
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+      });
+    }
+
+  </script>
+
+</body>
+</html>
