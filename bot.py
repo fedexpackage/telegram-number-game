@@ -29,6 +29,56 @@ def home():
 
 def verify_telegram_data(init_data):
     try:
+        if not init_data:
+            return None
+
+        data = dict(
+            parse_qsl(
+                init_data,
+                keep_blank_values=True
+            )
+        )
+
+        received_hash = data.pop("hash", None)
+
+        if not received_hash:
+            return None
+
+        data_check_string = "\n".join(
+            f"{key}={data[key]}"
+            for key in sorted(data)
+        )
+
+        secret_key = hmac.new(
+            b"WebAppData",
+            TOKEN.encode("utf-8"),
+            hashlib.sha256
+        ).digest()
+
+        calculated_hash = hmac.new(
+            secret_key,
+            data_check_string.encode("utf-8"),
+            hashlib.sha256
+        ).hexdigest()
+
+        if not hmac.compare_digest(
+            calculated_hash,
+            received_hash
+        ):
+            return None
+
+        auth_date = int(
+            data.get("auth_date", "0")
+        )
+
+        if time.time() - auth_date > 86400:
+            return None
+
+        return data
+
+    except Exception:
+        return None
+    try:
         data = dict(parse_qsl(init_data, keep_blank_values=True))
         )
 
