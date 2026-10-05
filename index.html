@@ -288,78 +288,65 @@
     // -----------------------------
 
     continuer.addEventListener(
-        "click",
-        async function() {
+    "click",
+    async function() {
 
-            const nom =
-                document.getElementById("nom")
-                .value.trim();
+        const nom =
+            document.getElementById("nom").value.trim();
 
-            const prenom =
-                document.getElementById("prenom")
-                .value.trim();
+        const prenom =
+            document.getElementById("prenom").value.trim();
 
-            const pays =
-                document.getElementById("pays")
-                .value.trim();
+        const pays =
+            document.getElementById("pays").value.trim();
 
-            const ville =
-                document.getElementById("ville")
-                .value.trim();
+        const ville =
+            document.getElementById("ville").value.trim();
 
-            const adresse =
-                document.getElementById("adresse")
-                .value.trim();
+        const adresse =
+            document.getElementById("adresse").value.trim();
 
-            const telephone =
-                document.getElementById("telephone")
-                .value.trim();
+        const telephone =
+            document.getElementById("telephone").value.trim();
 
+        if (
+            !nom ||
+            !prenom ||
+            !pays ||
+            !ville ||
+            !adresse ||
+            !telephone
+        ) {
 
-            if (
-                !nom ||
-                !prenom ||
-                !pays ||
-                !ville ||
-                !adresse ||
-                !telephone
-            ) {
-
-                message.className = "error";
-
-                message.textContent =
-                    "Veuillez remplir tous les champs.";
-
-                return;
-            }
-
-
-            joueur = {
-
-                nom: nom,
-
-                prenom: prenom,
-
-                pays: pays,
-
-                ville: ville,
-
-                adresse: adresse,
-
-                telephone: telephone,
-
-                resultat: "jeu_en_cours",
-
-                initData: tg.initData
-
-            };
-
-
-            continuer.disabled = true;
+            message.className = "error";
 
             message.textContent =
-                "Connexion au serveur...";
+                "Veuillez remplir tous les champs.";
 
+            return;
+        }
+
+        joueur = {
+            nom: nom,
+            prenom: prenom,
+            pays: pays,
+            ville: ville,
+            adresse: adresse,
+            telephone: telephone,
+            resultat: "jeu_en_cours",
+            initData: tg.initData
+        };
+
+        continuer.disabled = true;
+
+        message.className = "";
+        message.textContent =
+            "Connexion au serveur...";
+
+        let connexionReussie = false;
+
+        // 3 tentatives automatiques
+        for (let tentative = 1; tentative <= 3; tentative++) {
 
             try {
 
@@ -379,69 +366,78 @@
                         }
                     );
 
-
                 const data =
                     await response.json();
 
+                if (response.ok && data.ok) {
 
-                if (!response.ok) {
-
-                    throw new Error(
-                        data.message ||
-                        "Erreur serveur"
-                    );
+                    connexionReussie = true;
+                    break;
 
                 }
 
+            } catch (error) {
 
-                // Tirage de la case gagnante
-
-                caseGagnante =
-                    Math.floor(
-                        Math.random() * 12
-                    ) + 1;
-
-
-                tentativesRestantes = 3;
-
-                jeuTermine = false;
-
-
-                formulaire.style.display =
-                    "none";
-
-                jeu.style.display =
-                    "block";
-
-                chance.textContent =
-                    "Tentatives restantes : 3";
+                console.log(
+                    "Tentative " +
+                    tentative +
+                    " échouée :",
+                    error
+                );
 
             }
 
-            catch (error) {
-
-                console.error(error);
-
-                message.className =
-                    "error";
+            if (tentative < 3) {
 
                 message.textContent =
-                    "❌ Impossible de contacter le serveur.";
+                    "Serveur en cours de démarrage... " +
+                    tentative +
+                    "/3";
 
-                continuer.disabled = false;
+                await new Promise(
+                    function(resolve) {
+                        setTimeout(resolve, 5000);
+                    }
+                );
 
             }
-
         }
-    );
 
+        if (!connexionReussie) {
 
-    // -----------------------------
-    // CLIC SUR UNE CASE
-    // -----------------------------
+            message.className = "error";
 
-    document
-        .querySelectorAll(".case")
+            message.textContent =
+                "❌ Le serveur met trop de temps à répondre. Réessayez dans quelques secondes.";
+
+            continuer.disabled = false;
+
+            return;
+        }
+
+        // Serveur connecté
+        caseGagnante =
+            Math.floor(
+                Math.random() * 12
+            ) + 1;
+
+        tentativesRestantes = 3;
+
+        jeuTermine = false;
+
+        formulaire.style.display =
+            "none";
+
+        jeu.style.display =
+            "block";
+
+        chance.textContent =
+            "Tentatives restantes : 3";
+
+        message.textContent = "";
+
+    }
+);
         .forEach(function(button) {
 
             button.addEventListener(
