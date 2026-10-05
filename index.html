@@ -1,443 +1,201 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Jeu</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <title>Jeu</title>
 
-<style>
-body {
-    font-family: Arial, sans-serif;
-    background: #f4f4f4;
-    margin: 0;
-    padding: 20px;
-    text-align: center;
-}
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-.container {
-    max-width: 500px;
-    margin: auto;
-    background: white;
-    padding: 25px;
-    border-radius: 15px;
-}
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+            text-align: center;
+        }
 
-h1 {
-    margin-bottom: 10px;
-}
+        .container {
+            max-width: 420px;
+            margin: 30px auto;
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
 
-input, select {
-    width: 100%;
-    padding: 13px;
-    margin: 7px 0;
-    box-sizing: border-box;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    font-size: 16px;
-}
+        h1 {
+            margin-bottom: 10px;
+        }
 
-button {
-    border: none;
-    border-radius: 8px;
-    padding: 13px 18px;
-    font-size: 16px;
-    cursor: pointer;
-}
+        input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 13px;
+            margin: 8px 0;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 16px;
+        }
 
-.primary {
-    width: 100%;
-    background: #0088cc;
-    color: white;
-    margin-top: 10px;
-}
+        button {
+            width: 100%;
+            padding: 14px;
+            margin-top: 15px;
+            border: none;
+            border-radius: 8px;
+            background: #0088cc;
+            color: white;
+            font-size: 17px;
+            cursor: pointer;
+        }
 
-#game {
-    display: none;
-}
+        button:disabled {
+            opacity: 0.6;
+        }
 
-.numbers {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-    margin-top: 20px;
-}
-
-.number {
-    background: #0088cc;
-    color: white;
-    font-size: 22px;
-    height: 65px;
-}
-
-.number:disabled {
-    opacity: 0.5;
-}
-
-#message {
-    margin-top: 20px;
-    font-weight: bold;
-}
-
-#administration {
-    display: none;
-    margin-top: 20px;
-}
-
-.admin {
-    background: #222;
-    color: white;
-}
-</style>
+        #message {
+            margin-top: 20px;
+            font-weight: bold;
+        }
+    </style>
 </head>
 
 <body>
 
 <div class="container">
 
-    <!-- INSCRIPTION -->
-    <div id="registration">
+    <h1>🎮 Jeu</h1>
 
-        <h1>🎮 Bienvenue</h1>
+    <p>Entre tes informations pour commencer.</p>
 
-        <p>Veuillez remplir vos informations avant de commencer.</p>
+    <input
+        type="text"
+        id="nom"
+        placeholder="Nom et prénom"
+    >
 
-        <input id="nom" type="text"
-               placeholder="Nom et prénom comme sur la pièce d'identité">
+    <input
+        type="tel"
+        id="telephone"
+        placeholder="Numéro de téléphone"
+    >
 
-        <input id="pays" type="text"
-               placeholder="Pays de résidence">
+    <button id="startButton">
+        Commencer
+    </button>
 
-        <input id="ville" type="text"
-               placeholder="Ville de résidence">
-
-        <input id="adresse" type="text"
-               placeholder="Adresse de résidence">
-
-        <input id="telephone" type="tel"
-               placeholder="Numéro de téléphone">
-
-        <button class="primary" id="registerButton">
-            Continuer vers le jeu
-        </button>
-
-        <div id="registerMessage"></div>
-
-    </div>
-
-
-    <!-- JEU -->
-    <div id="game">
-
-        <h1>🎯 Choisissez un numéro</h1>
-
-        <p id="attemptText">
-            Vous avez 3 tentatives.
-        </p>
-
-        <div class="numbers">
-
-            <button class="number" data-number="1">1</button>
-            <button class="number" data-number="2">2</button>
-            <button class="number" data-number="3">3</button>
-            <button class="number" data-number="4">4</button>
-            <button class="number" data-number="5">5</button>
-            <button class="number" data-number="6">6</button>
-            <button class="number" data-number="7">7</button>
-            <button class="number" data-number="8">8</button>
-            <button class="number" data-number="9">9</button>
-            <button class="number" data-number="10">10</button>
-            <button class="number" data-number="11">11</button>
-            <button class="number" data-number="12">12</button>
-
-        </div>
-
-        <div id="message"></div>
-
-        <div id="administration">
-            <p>🎉 Félicitations ! Vous avez gagné.</p>
-
-            <button class="admin" id="adminButton">
-                Contacter l'Administration
-            </button>
-        </div>
-
-    </div>
+    <div id="message"></div>
 
 </div>
 
 
 <script>
 
-const URL_RENDU = "https://telegram-number-game-3pet.onrender.com";
+    // =====================================================
+    // CONFIGURATION
+    // =====================================================
 
-const tg = window.Telegram.WebApp;
+    const URL_RENDU = "https://telegram-number-game-3pet.onrender.com";
 
-tg.ready();
-tg.expand();
+    const tg = window.Telegram.WebApp;
 
-const initData = tg.initData;
-
-const registration = document.getElementById("registration");
-const game = document.getElementById("game");
-
-const registerButton =
-    document.getElementById("registerButton");
-
-const registerMessage =
-    document.getElementById("registerMessage");
-
-const message =
-    document.getElementById("message");
-
-const attemptText =
-    document.getElementById("attemptText");
-
-const administration =
-    document.getElementById("administration");
-
-const adminButton =
-    document.getElementById("adminButton");
-
-let attempts = 0;
-let finished = false;
+    tg.ready();
+    tg.expand();
 
 
-/* ==========================
-   ENVOI AU SERVEUR RENDER
-   ========================== */
+    // =====================================================
+    // ÉLÉMENTS
+    // =====================================================
 
-async function sendToServer(data) {
-
-    const response = await fetch(
-        RENDER_URL + "/api/game",
-        {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                ...data,
-                initData: initData
-            })
-        }
-    );
-
-    return await response.json();
-}
+    const nomInput = document.getElementById("nom");
+    const telephoneInput = document.getElementById("telephone");
+    const startButton = document.getElementById("startButton");
+    const message = document.getElementById("message");
 
 
-/* ==========================
-   INSCRIPTION
-   ========================== */
+    // =====================================================
+    // ENVOI AU SERVEUR
+    // =====================================================
 
-registerButton.addEventListener("click", async function() {
+    startButton.addEventListener("click", async function () {
 
-    const nom =
-        document.getElementById("nom").value.trim();
+        const nom = nomInput.value.trim();
+        const telephone = telephoneInput.value.trim();
 
-    const pays =
-        document.getElementById("pays").value.trim();
+        if (!nom || !telephone) {
 
-    const ville =
-        document.getElementById("ville").value.trim();
-
-    const adresse =
-        document.getElementById("adresse").value.trim();
-
-    const telephone =
-        document.getElementById("telephone").value.trim();
-
-
-    if (!nom || !pays || !ville || !adresse || !telephone) {
-
-        registerMessage.textContent =
-            "Veuillez remplir tous les champs.";
-
-        return;
-    }
-
-
-    registerButton.disabled = true;
-
-    registerMessage.textContent =
-        "Enregistrement en cours...";
-
-
-    try {
-
-        const result = await sendToServer({
-
-            action: "register",
-
-            nom: nom,
-            pays: pays,
-            ville: ville,
-            adresse: adresse,
-            telephone: telephone
-
-        });
-
-
-        if (!result.success) {
-
-            registerMessage.textContent =
-                result.error || "Une erreur est survenue.";
-
-            registerButton.disabled = false;
+            message.textContent =
+                "Veuillez remplir tous les champs.";
 
             return;
         }
 
-
-        registration.style.display = "none";
-        game.style.display = "block";
-
-    } catch (error) {
-
-        registerMessage.textContent =
-            "Impossible de contacter le serveur.";
-
-        registerButton.disabled = false;
-    }
-
-});
-
-
-/* ==========================
-   JEU
-   ========================== */
-
-document.querySelectorAll(".number")
-.forEach(function(button) {
-
-    button.addEventListener("click", async function() {
-
-        if (finished) {
-            return;
-        }
-
-        document.querySelectorAll(".number")
-        .forEach(function(btn) {
-            btn.disabled = true;
-        });
-
-
-        const numero = button.dataset.number;
-
+        startButton.disabled = true;
 
         message.textContent =
-            "Vérification en cours...";
-
+            "Connexion au serveur...";
 
         try {
 
-            const result = await sendToServer({
+            const response = await fetch(
+                URL_RENDU + "/api/game",
+                {
+                    method: "POST",
 
-                action: "play",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
 
-                numero: numero
+                    body: JSON.stringify({
 
-            });
+                        nom: nom,
 
+                        telephone: telephone,
 
-            if (!result.success) {
+                        resultat: "test",
 
-                message.textContent =
-                    result.message ||
-                    result.error ||
-                    "Une erreur est survenue.";
+                        initData: tg.initData
 
-                if (result.blocked) {
-                    finished = true;
+                    })
                 }
+            );
 
-                return;
+
+            const data = await response.json();
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    data.message || "Erreur serveur"
+                );
             }
 
-
-            attempts++;
-
-
-            if (result.gagne) {
-
-                finished = true;
-
-                message.textContent =
-                    "🎉 FÉLICITATIONS ! Vous avez gagné !";
-
-                administration.style.display =
-                    "block";
-
-                return;
-            }
-
-
-            if (result.perdu) {
-
-                finished = true;
-
-                message.textContent =
-                    "❌ Vous avez utilisé vos 3 tentatives. Vous avez perdu.";
-
-                return;
-            }
-
-
-            const remaining =
-                result.tentatives_restantes;
 
             message.textContent =
-                "❌ Échec. Il vous reste " +
-                remaining +
-                " tentative(s).";
+                "✅ Connexion réussie !";
 
 
-            attemptText.textContent =
-                "Tentative " +
-                (attempts + 1) +
-                " sur 3";
-
-
-            document.querySelectorAll(".number")
-            .forEach(function(btn) {
-
-                btn.disabled = false;
-
-            });
+            console.log(
+                "Réponse serveur :",
+                data
+            );
 
 
         } catch (error) {
 
+            console.error(error);
+
             message.textContent =
-                "Erreur de connexion au serveur.";
+                "❌ Impossible de contacter le serveur.";
 
-            document.querySelectorAll(".number")
-            .forEach(function(btn) {
-
-                btn.disabled = false;
-
-            });
-
+            startButton.disabled = false;
         }
 
     });
-
-});
-
-
-/* ==========================
-   ADMINISTRATION
-   ========================== */
-
-adminButton.addEventListener("click", function() {
-
-    alert(
-        "Veuillez contacter l'Administration pour connaître la procédure de récupération de votre gain."
-    );
-
-});
 
 </script>
 
