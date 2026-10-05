@@ -3,8 +3,8 @@ import json
 import hmac
 import hashlib
 import threading
+import asyncio
 import urllib.request
-import urllib.error
 from datetime import datetime, timezone
 from urllib.parse import parse_qsl
 
@@ -12,19 +12,29 @@ from flask import Flask, request, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, ContextTypes
 
+
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 SITE_URL = os.environ["SITE_URL"]
 GOOGLE_SCRIPT_URL = os.environ["GOOGLE_SCRIPT_URL"]
+
 PORT = int(os.environ.get("PORT", "10000"))
 
 app = Flask(__name__)
 
-def verify_telegram_data(init_data: str) -> bool:
+
+# =========================================================
+# VÉRIFICATION DES DONNÉES TELEGRAM
+# =========================================================
+
+def verify_telegram_data(init_data):
     if not init_data:
         return False
+
     try:
         data = dict(parse_qsl(init_data, keep_blank_values=True))
+
         received_hash = data.pop("hash", None)
+
         if not received_hash:
             return False
 
@@ -50,50 +60,83 @@ def verify_telegram_data(init_data: str) -> bool:
             received_hash
         )
 
-    except Exception as e:
-        print("Erreur vérification Telegram :", e)
+    except Exception as error:
+        print("Erreur vérification Telegram :", repr(error))
         return False
 
 
+# =========================================================
+# ENVOI VERS GOOGLE APPS SCRIPT
+# =========================================================
+
 def send_to_google(data):
+
     try:
+
         payload = json.dumps(data).encode("utf-8")
 
         req = urllib.request.Request(
             GOOGLE_SCRIPT_URL,
             data=payload,
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json"
+            },
             method="POST"
         )
 
         with urllib.request.urlopen(req, timeout=20) as response:
+
             result = response.read().decode("utf-8")
 
         print("Réponse Google Apps Script :", result)
+
         return True, result
 
-    except Exception as e:
-        print("Erreur Google Apps Script :", repr(e))
-        return False, str(e)
+    except Exception as error:
 
+        print(
+            "Erreur Google Apps Script :",
+            repr(error)
+        )
+
+        return False, str(error)
+
+
+# =========================================================
+# SERVEUR PRINCIPAL
+# =========================================================
 
 @app.route("/", methods=["GET"])
 def home():
+
     return "Bot en ligne", 200
 
 
-@app.route("/api/game", methods=["POST", "OPTIONS"])
+# =========================================================
+# API DU JEU
+# =========================================================
+
+@app.route(
+    "/api/game",
+    methods=["POST", "OPTIONS"]
+)
 def game():
 
+    # Réponse CORS pour le navigateur
     if request.method == "OPTIONS":
-        response = jsonify({"ok": True})
+
+        response = jsonify({
+            "ok": True
+        })
+
         response.headers["Access-Control-Allow-Origin"] = "*"
         response.headers["Access-Control-Allow-Headers"] = (
-            "Content-Type, Authorization"
+            "Content-Type"
         )
         response.headers["Access-Control-Allow-Methods"] = (
             "POST, OPTIONS"
         )
+
         return response
 
     try:
@@ -101,112 +144,224 @@ def game():
         body = request.get_json(silent=True)
 
         if not body:
+
             response = jsonify({
                 "ok": False,
                 "message": "Aucune donnée reçue."
             })
+
             response.status_code = 400
+
+            response.headers["Access-Control-Allow-Origin"] = "*"
+
             return response
 
+
         print("Données reçues :", body)
+
+
+        # -------------------------------------------------
+        # Vérification Telegram
+        # -------------------------------------------------
 
         init_data = body.get("initData", "")
 
         if init_data:
+
             if not verify_telegram_data(init_data):
+
                 response = jsonify({
                     "ok": False,
                     "message": "Données Telegram invalides."
                 })
+
                 response.status_code = 403
+
+                response.headers["Access-Control-Allow-Origin"] = "*"
+
                 return response
 
+
+        # -------------------------------------------------
+        # Préparation des données
+        # -------------------------------------------------
+
         player_data = {
+
             "nom": body.get("nom", ""),
+
+            "prenom": body.get("prenom", ""),
+
+            "pays": body.get("pays", ""),
+
+            "ville": body.get("ville", ""),
+
+            "adresse": body.get("adresse", ""),
+
             "telephone": body.get("telephone", ""),
-            "resultat": body.get("resultat", ""),
-            "date": datetime.now(timezone.utc).isoformat(),
+
+            "resultat": body.get(
+                "resultat",
+                "jeu_en_cours"
+            ),
+
+            "date": datetime.now(
+                timezone.utc
+            ).isoformat()
         }
 
-        success, google_result = send_to_google(player_data)
+
+        # -------------------------------------------------
+        # Envoi Google
+        # -------------------------------------------------
+
+        success, google_result = send_to_google(
+            player_data
+        )
+
 
         if not success:
+
             response = jsonify({
+
                 "ok": False,
-                "message": "Erreur lors de l'envoi vers Google Apps Script.",
+
+                "message":
+                    "Erreur lors de l'envoi vers Google Apps Script.",
+
                 "details": google_result
+
             })
+
             response.status_code = 502
+
+            response.headers["Access-Control-Allow-Origin"] = "*"
+
             return response
 
+
+        # -------------------------------------------------
+        # Réponse correcte
+        # -------------------------------------------------
+
         response = jsonify({
+
             "ok": True,
-            "message": "Données enregistrées.",
-            "google_response": google_result
+
+            "message":
+                "Données enregistrées."
+
         })
 
         response.headers["Access-Control-Allow-Origin"] = "*"
 
         return response
 
-    except Exception as e:
 
-        print("ERREUR /api/game :", repr(e))
+    except Exception as error:
+
+        print(
+            "ERREUR /api/game :",
+            repr(error)
+        )
 
         response = jsonify({
+
             "ok": False,
-            "message": "Erreur serveur.",
-            "details": str(e)
+
+            "message":
+                "Erreur serveur.",
+
+            "details":
+                str(error)
+
         })
 
         response.status_code = 500
 
+        response.headers["Access-Control-Allow-Origin"] = "*"
+
         return response
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# =========================================================
+# BOUTON /START TELEGRAM
+# =========================================================
+
+async def start(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
     keyboard = [[
+
         InlineKeyboardButton(
             "🎮 Jouer",
-            web_app=WebAppInfo(url=SITE_URL)
+            web_app=WebAppInfo(
+                url=SITE_URL
+            )
         )
+
     ]]
 
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = InlineKeyboardMarkup(
+        keyboard
+    )
 
     await update.message.reply_text(
+
         "Bienvenue !\n\n"
         "Clique sur le bouton ci-dessous pour commencer.",
+
         reply_markup=reply_markup
     )
 
 
+# =========================================================
+# BOT TELEGRAM
+# =========================================================
+
 async def run_bot():
 
-    application = Application.builder().token(BOT_TOKEN).build()
-
-    application.add_handler(
-        CommandHandler("start", start)
+    application = (
+        Application
+        .builder()
+        .token(BOT_TOKEN)
+        .build()
     )
 
-    print("Bot Telegram démarré.")
+    application.add_handler(
+        CommandHandler(
+            "start",
+            start
+        )
+    )
+
+    print(
+        "Bot Telegram démarré."
+    )
 
     await application.initialize()
+
     await application.start()
+
     await application.updater.start_polling()
 
     while True:
-        import asyncio
+
         await asyncio.sleep(3600)
 
 
 def start_telegram_bot():
 
-    import asyncio
+    asyncio.run(
+        run_bot()
+    )
 
-    asyncio.run(run_bot())
 
+# =========================================================
+# DÉMARRAGE
+# =========================================================
 
 if __name__ == "__main__":
 
@@ -216,6 +371,7 @@ if __name__ == "__main__":
     )
 
     telegram_thread.start()
+
 
     app.run(
         host="0.0.0.0",
