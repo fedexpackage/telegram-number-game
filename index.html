@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>Jeu</title>
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -19,7 +18,7 @@
 
         .container {
             max-width: 420px;
-            margin: 30px auto;
+            margin: 20px auto;
             background: white;
             padding: 25px;
             border-radius: 15px;
@@ -34,7 +33,7 @@
             width: 100%;
             box-sizing: border-box;
             padding: 13px;
-            margin: 8px 0;
+            margin: 7px 0;
             border: 1px solid #ccc;
             border-radius: 8px;
             font-size: 16px;
@@ -43,7 +42,7 @@
         button {
             width: 100%;
             padding: 14px;
-            margin-top: 15px;
+            margin-top: 12px;
             border: none;
             border-radius: 8px;
             background: #0088cc;
@@ -56,9 +55,27 @@
             opacity: 0.6;
         }
 
+        .choice {
+            background: #0088cc;
+            margin: 10px 0;
+        }
+
+        #jeu,
+        #fin {
+            display: none;
+        }
+
         #message {
-            margin-top: 20px;
+            margin-top: 18px;
             font-weight: bold;
+        }
+
+        .success {
+            color: green;
+        }
+
+        .error {
+            color: red;
         }
     </style>
 </head>
@@ -67,38 +84,104 @@
 
 <div class="container">
 
-    <h1>🎮 Jeu</h1>
+    <!-- FORMULAIRE -->
+    <div id="formulaire">
 
-    <p>Entre tes informations pour commencer.</p>
+        <h1>🎮 Jeu</h1>
 
-    <input
-        type="text"
-        id="nom"
-        placeholder="Nom et prénom"
-    >
+        <p>Remplissez vos informations pour commencer.</p>
 
-    <input
-        type="tel"
-        id="telephone"
-        placeholder="Numéro de téléphone"
-    >
+        <input
+            type="text"
+            id="nom"
+            placeholder="Nom"
+        >
 
-    <button id="startButton">
-        Commencer
-    </button>
+        <input
+            type="text"
+            id="prenom"
+            placeholder="Prénom"
+        >
 
-    <div id="message"></div>
+        <input
+            type="text"
+            id="pays"
+            placeholder="Pays"
+        >
+
+        <input
+            type="text"
+            id="ville"
+            placeholder="Ville"
+        >
+
+        <input
+            type="text"
+            id="adresse"
+            placeholder="Adresse de résidence"
+        >
+
+        <input
+            type="tel"
+            id="telephone"
+            placeholder="Numéro de téléphone"
+        >
+
+        <button id="continuer">
+            Continuer
+        </button>
+
+        <div id="message"></div>
+
+    </div>
+
+
+    <!-- JEU -->
+    <div id="jeu">
+
+        <h1>🎯 À toi de jouer !</h1>
+
+        <p id="chance">
+            Chance 1 sur 3
+        </p>
+
+        <p>
+            Choisis une case :
+        </p>
+
+        <button class="choice" data-choice="1">
+            1️⃣
+        </button>
+
+        <button class="choice" data-choice="2">
+            2️⃣
+        </button>
+
+        <button class="choice" data-choice="3">
+            3️⃣
+        </button>
+
+        <div id="resultat"></div>
+
+    </div>
+
+
+    <!-- FIN -->
+    <div id="fin">
+
+        <h1 id="titreFin"></h1>
+
+        <p id="messageFin"></p>
+
+    </div>
 
 </div>
 
 
 <script>
 
-    // =====================================================
-    // CONFIGURATION
-    // =====================================================
-
-    const URL_RENDU = "https://telegram-number-game-3pet.onrender.com";
+    const URL_RENDU =
+        "https://telegram-number-game-3pet.onrender.com";
 
     const tg = window.Telegram.WebApp;
 
@@ -106,26 +189,88 @@
     tg.expand();
 
 
-    // =====================================================
+    // -------------------------
     // ÉLÉMENTS
-    // =====================================================
+    // -------------------------
 
-    const nomInput = document.getElementById("nom");
-    const telephoneInput = document.getElementById("telephone");
-    const startButton = document.getElementById("startButton");
-    const message = document.getElementById("message");
+    const formulaire =
+        document.getElementById("formulaire");
+
+    const jeu =
+        document.getElementById("jeu");
+
+    const fin =
+        document.getElementById("fin");
+
+    const continuer =
+        document.getElementById("continuer");
+
+    const message =
+        document.getElementById("message");
+
+    const resultat =
+        document.getElementById("resultat");
+
+    const chance =
+        document.getElementById("chance");
+
+    const titreFin =
+        document.getElementById("titreFin");
+
+    const messageFin =
+        document.getElementById("messageFin");
 
 
-    // =====================================================
-    // ENVOI AU SERVEUR
-    // =====================================================
+    // -------------------------
+    // DONNÉES DU JOUEUR
+    // -------------------------
 
-    startButton.addEventListener("click", async function () {
+    let joueur = {};
 
-        const nom = nomInput.value.trim();
-        const telephone = telephoneInput.value.trim();
+    let nombreChance = 1;
 
-        if (!nom || !telephone) {
+    const nombreMaxChance = 3;
+
+    let jeuTermine = false;
+
+
+    // -------------------------
+    // BOUTON CONTINUER
+    // -------------------------
+
+    continuer.addEventListener("click", async function () {
+
+        const nom =
+            document.getElementById("nom").value.trim();
+
+        const prenom =
+            document.getElementById("prenom").value.trim();
+
+        const pays =
+            document.getElementById("pays").value.trim();
+
+        const ville =
+            document.getElementById("ville").value.trim();
+
+        const adresse =
+            document.getElementById("adresse").value.trim();
+
+        const telephone =
+            document.getElementById("telephone").value.trim();
+
+
+        // Vérification
+
+        if (
+            !nom ||
+            !prenom ||
+            !pays ||
+            !ville ||
+            !adresse ||
+            !telephone
+        ) {
+
+            message.className = "error";
 
             message.textContent =
                 "Veuillez remplir tous les champs.";
@@ -133,10 +278,35 @@
             return;
         }
 
-        startButton.disabled = true;
+
+        joueur = {
+
+            nom: nom,
+
+            prenom: prenom,
+
+            pays: pays,
+
+            ville: ville,
+
+            adresse: adresse,
+
+            telephone: telephone,
+
+            resultat: "jeu_en_cours",
+
+            initData: tg.initData
+
+        };
+
+
+        continuer.disabled = true;
+
+        message.className = "";
 
         message.textContent =
             "Connexion au serveur...";
+
 
         try {
 
@@ -146,56 +316,232 @@
                     method: "POST",
 
                     headers: {
-                        "Content-Type": "application/json"
+                        "Content-Type":
+                            "application/json"
                     },
 
-                    body: JSON.stringify({
-
-                        nom: nom,
-
-                        telephone: telephone,
-
-                        resultat: "test",
-
-                        initData: tg.initData
-
-                    })
+                    body: JSON.stringify(joueur)
                 }
             );
 
 
-            const data = await response.json();
+            const data =
+                await response.json();
 
 
             if (!response.ok) {
 
                 throw new Error(
-                    data.message || "Erreur serveur"
+                    data.message ||
+                    "Erreur serveur"
                 );
             }
 
 
-            message.textContent =
-                "✅ Connexion réussie !";
+            // Le formulaire disparaît
 
+            formulaire.style.display =
+                "none";
 
-            console.log(
-                "Réponse serveur :",
-                data
-            );
+            // Le jeu apparaît
 
+            jeu.style.display =
+                "block";
 
-        } catch (error) {
+        }
+
+        catch (error) {
 
             console.error(error);
+
+            message.className = "error";
 
             message.textContent =
                 "❌ Impossible de contacter le serveur.";
 
-            startButton.disabled = false;
+            continuer.disabled = false;
         }
 
     });
+
+
+    // -------------------------
+    // JEU
+    // -------------------------
+
+    document.querySelectorAll(".choice")
+        .forEach(function(button) {
+
+        button.addEventListener(
+            "click",
+            function() {
+
+                if (jeuTermine) {
+                    return;
+                }
+
+
+                const choix =
+                    button.dataset.choice;
+
+
+                /*
+                 * POUR LE TEST :
+                 * la bonne case est la case 2.
+                 */
+
+                const bonneCase = "2";
+
+
+                if (choix === bonneCase) {
+
+                    gagner();
+
+                    return;
+                }
+
+
+                // Mauvais choix
+
+                if (nombreChance >= nombreMaxChance) {
+
+                    perdre();
+
+                    return;
+                }
+
+
+                nombreChance++;
+
+                chance.textContent =
+                    "Chance " +
+                    nombreChance +
+                    " sur " +
+                    nombreMaxChance;
+
+                resultat.textContent =
+                    "❌ Mauvais choix. Essaie encore.";
+
+            }
+
+        );
+
+    });
+
+
+    // -------------------------
+    // VICTOIRE
+    // -------------------------
+
+    async function gagner() {
+
+        jeuTermine = true;
+
+        titreFin.textContent =
+            "🎉 Félicitations !";
+
+        messageFin.textContent =
+            "Tu as gagné ! Contacte l'administrateur pour récupérer ton cadeau.";
+
+        jeu.style.display =
+            "none";
+
+        fin.style.display =
+            "block";
+
+
+        await envoyerResultat(
+            "gagne"
+        );
+
+    }
+
+
+    // -------------------------
+    // DÉFAITE
+    // -------------------------
+
+    async function perdre() {
+
+        jeuTermine = true;
+
+        titreFin.textContent =
+            "😔 Partie terminée";
+
+        messageFin.textContent =
+            "Tu as utilisé tes 3 chances. Merci d'avoir participé.";
+
+        jeu.style.display =
+            "none";
+
+        fin.style.display =
+            "block";
+
+
+        await envoyerResultat(
+            "perdu"
+        );
+
+    }
+
+
+    // -------------------------
+    // ENVOYER LE RÉSULTAT
+    // -------------------------
+
+    async function envoyerResultat(
+        resultatFinal
+    ) {
+
+        try {
+
+            const donnees = {
+
+                nom: joueur.nom,
+
+                prenom: joueur.prenom,
+
+                pays: joueur.pays,
+
+                ville: joueur.ville,
+
+                adresse: joueur.adresse,
+
+                telephone: joueur.telephone,
+
+                resultat: resultatFinal,
+
+                initData: tg.initData
+
+            };
+
+
+            await fetch(
+                URL_RENDU + "/api/game",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify(donnees)
+                }
+            );
+
+        }
+
+        catch (error) {
+
+            console.error(
+                "Erreur envoi résultat :",
+                error
+            );
+
+        }
+
+    }
 
 </script>
 
