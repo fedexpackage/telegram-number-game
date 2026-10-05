@@ -1,2 +1,2 @@
-python-telegram-bot
-flask
+python-telegram-bot==22.8
+flask==3.1.3
