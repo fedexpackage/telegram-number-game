@@ -229,10 +229,7 @@ def save_to_google_background(data):
 @app.route("/", methods=["GET"])
 def home():
 
-    return jsonify({
-        "ok": True,
-        "message": "Serveur du jeu en ligne."
-    })
+    return app.send_static_file("index.html")
 
 
 # =========================
