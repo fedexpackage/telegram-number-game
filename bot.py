@@ -8,7 +8,7 @@ import urllib.request
 from datetime import datetime, timezone
 from urllib.parse import parse_qsl
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -228,6 +228,8 @@ def save_to_google_background(data):
 
 @app.route("/", methods=["GET"])
 def home():
+
+    return send_file("index.html")
 
     return app.send_static_file("index.html")
 
