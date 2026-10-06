@@ -3,11 +3,15 @@ import json
 import hmac
 import hashlib
 import threading
+import asyncio
 import urllib.request
 from datetime import datetime, timezone
 from urllib.parse import parse_qsl
 
 from flask import Flask, request, jsonify
+
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram.ext import Application, CommandHandler, ContextTypes
 
 
 # =========================
@@ -19,7 +23,72 @@ GOOGLE_SCRIPT_URL = os.environ["GOOGLE_SCRIPT_URL"]
 
 PORT = int(os.environ.get("PORT", "10000"))
 
+# Adresse de ton jeu
+GAME_URL = "https://telegram-number-game-3.onrender.com"
+
 app = Flask(__name__)
+
+
+# =========================
+# BOT TELEGRAM
+# =========================
+
+async def start_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "🎮 Jouer",
+                web_app=WebAppInfo(url=GAME_URL)
+            )
+        ]
+    ]
+
+    reply_markup = InlineKeyboardMarkup(
+        keyboard
+    )
+
+    await update.message.reply_text(
+        "🎉 Bienvenue !\n\n"
+        "Vous êtes invité à participer à notre jeu.\n\n"
+        "Cliquez sur le bouton ci-dessous pour commencer.",
+        reply_markup=reply_markup
+    )
+
+
+async def run_telegram_bot():
+
+    telegram_app = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .build()
+    )
+
+    telegram_app.add_handler(
+        CommandHandler(
+            "start",
+            start_command
+        )
+    )
+
+    print("Bot Telegram démarré.")
+
+    await telegram_app.initialize()
+    await telegram_app.start()
+    await telegram_app.updater.start_polling()
+
+    # Garder le bot actif
+    await asyncio.Event().wait()
+
+
+def start_telegram_thread():
+
+    asyncio.run(
+        run_telegram_bot()
+    )
 
 
 # =========================
@@ -28,9 +97,11 @@ app = Flask(__name__)
 
 @app.after_request
 def add_cors_headers(response):
+
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+
     return response
 
 
@@ -39,10 +110,12 @@ def add_cors_headers(response):
 # =========================
 
 def verify_telegram_data(init_data):
+
     if not init_data:
         return True
 
     try:
+
         data = dict(
             parse_qsl(
                 init_data,
@@ -50,7 +123,10 @@ def verify_telegram_data(init_data):
             )
         )
 
-        received_hash = data.pop("hash", None)
+        received_hash = data.pop(
+            "hash",
+            None
+        )
 
         if not received_hash:
             return False
@@ -78,10 +154,12 @@ def verify_telegram_data(init_data):
         )
 
     except Exception as error:
+
         print(
             "Erreur vérification Telegram :",
             repr(error)
         )
+
         return False
 
 
@@ -90,6 +168,7 @@ def verify_telegram_data(init_data):
 # =========================
 
 def send_to_google(data):
+
     try:
 
         payload = json.dumps(
@@ -179,7 +258,6 @@ def health():
 )
 def game():
 
-    # Gestion de la requête OPTIONS
     if request.method == "OPTIONS":
 
         return jsonify({
@@ -200,12 +278,10 @@ def game():
                     "Aucune donnée reçue."
             }), 400
 
-
         print(
             "Données reçues :",
             body
         )
-
 
         # =========================
         # VERIFICATION TELEGRAM
@@ -227,7 +303,6 @@ def game():
                     "message":
                         "Données Telegram invalides."
                 }), 403
-
 
         # =========================
         # DONNEES JOUEUR
@@ -283,7 +358,6 @@ def game():
                 ).isoformat()
         }
 
-        
         # =========================
         # SAUVEGARDE GOOGLE
         # =========================
@@ -291,7 +365,6 @@ def game():
         save_to_google_background(
             player_data
         )
-
 
         # =========================
         # REPONSE AU SITE
@@ -305,7 +378,6 @@ def game():
                 "Jeu autorisé."
 
         }), 200
-
 
     except Exception as error:
 
@@ -325,7 +397,7 @@ def game():
 
 
 # =========================
-# DEMARRAGE FLASK
+# DEMARRAGE
 # =========================
 
 if __name__ == "__main__":
@@ -334,9 +406,13 @@ if __name__ == "__main__":
         "Serveur Flask démarré."
     )
 
-    print(
-        "Polling Telegram désactivé."
+    # Démarrage du bot Telegram
+    telegram_thread = threading.Thread(
+        target=start_telegram_thread,
+        daemon=True
     )
+
+    telegram_thread.start()
 
     app.run(
         host="0.0.0.0",
