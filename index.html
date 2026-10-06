@@ -302,7 +302,7 @@
 
     let jeuTermine = false;
 
-    let caseGagnante = null;
+    let casesGagnantes = [];
 
 
     // ==========================================
@@ -316,10 +316,19 @@
          * aléatoirement parmi les 12.
          */
 
-        caseGagnante =
-            Math.floor(
-                Math.random() * 12
-            ) + 1;
+        casesGagnantes = [];
+
+while (casesGagnantes.length < 6) {
+
+    const numero =
+        Math.floor(
+            Math.random() * 12
+        ) + 1;
+
+    if (!casesGagnantes.includes(numero)) {
+        casesGagnantes.push(numero);
+    }
+}
 
 
         /*
@@ -600,8 +609,8 @@
                     // ==================================
 
                     if (
-                        numero === caseGagnante
-                    ) {
+    casesGagnantes.includes(numero)
+) {
 
                         gagner();
 
