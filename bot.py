@@ -31,15 +31,10 @@ from telegram.ext import (
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 
-GOOGLE_SCRIPT_URL = os.environ[
-    "GOOGLE_SCRIPT_URL"
-]
+GOOGLE_SCRIPT_URL = os.environ["GOOGLE_SCRIPT_URL"]
 
 PORT = int(
-    os.environ.get(
-        "PORT",
-        "10000"
-    )
+    os.environ.get("PORT", "10000")
 )
 
 GAME_URL = (
@@ -144,9 +139,7 @@ def add_cors_headers(response):
 # VERIFICATION TELEGRAM
 # =========================
 
-def verify_telegram_data(
-    init_data
-):
+def verify_telegram_data(init_data):
 
     if not init_data:
         return False
@@ -175,17 +168,13 @@ def verify_telegram_data(
 
         secret_key = hmac.new(
             b"WebAppData",
-            BOT_TOKEN.encode(
-                "utf-8"
-            ),
+            BOT_TOKEN.encode("utf-8"),
             hashlib.sha256
         ).digest()
 
         calculated_hash = hmac.new(
             secret_key,
-            data_check_string.encode(
-                "utf-8"
-            ),
+            data_check_string.encode("utf-8"),
             hashlib.sha256
         ).hexdigest()
 
@@ -205,12 +194,10 @@ def verify_telegram_data(
 
 
 # =========================
-# RECUPERER TELEGRAM ID
+# TELEGRAM ID
 # =========================
 
-def get_telegram_user_id(
-    init_data
-):
+def get_telegram_user_id(init_data):
 
     try:
 
@@ -233,16 +220,12 @@ def get_telegram_user_id(
             user_data
         )
 
-        telegram_id = user.get(
-            "id"
-        )
+        user_id = user.get("id")
 
-        if telegram_id is None:
+        if user_id is None:
             return None
 
-        return str(
-            telegram_id
-        )
+        return str(user_id)
 
     except Exception as error:
 
@@ -255,32 +238,24 @@ def get_telegram_user_id(
 
 
 # =========================
-# ENVOI GOOGLE SHEETS
+# GOOGLE SHEETS
 # =========================
 
-def send_to_google(
-    data
-):
+def send_to_google(data):
 
     try:
 
         payload = json.dumps(
             data
-        ).encode(
-            "utf-8"
-        )
+        ).encode("utf-8")
 
         req = urllib.request.Request(
-
             GOOGLE_SCRIPT_URL,
-
             data=payload,
-
             headers={
                 "Content-Type":
                     "application/json"
             },
-
             method="POST"
         )
 
@@ -298,19 +273,7 @@ def send_to_google(
             result
         )
 
-        try:
-
-            return json.loads(
-                result
-            )
-
-        except Exception:
-
-            return {
-                "success": False,
-                "message":
-                    "Réponse Google invalide."
-            }
+        return json.loads(result)
 
     except Exception as error:
 
@@ -322,7 +285,7 @@ def send_to_google(
         return {
             "success": False,
             "message":
-                "Impossible de contacter Google Sheets."
+                "Erreur de communication avec Google Sheets."
         }
 
 
@@ -330,34 +293,22 @@ def send_to_google(
 # PAGE PRINCIPALE
 # =========================
 
-@app.route(
-    "/",
-    methods=["GET"]
-)
+@app.route("/", methods=["GET"])
 def home():
 
-    return send_file(
-        "index.html"
-    )
+    return send_file("index.html")
 
 
 # =========================
-# TEST SERVEUR
+# HEALTH
 # =========================
 
-@app.route(
-    "/health",
-    methods=["GET"]
-)
+@app.route("/health", methods=["GET"])
 def health():
 
     return jsonify({
-
         "ok": True,
-
-        "message":
-            "Serveur opérationnel."
-
+        "message": "Serveur opérationnel."
     })
 
 
@@ -367,10 +318,7 @@ def health():
 
 @app.route(
     "/api/game",
-    methods=[
-        "POST",
-        "OPTIONS"
-    ]
+    methods=["POST", "OPTIONS"]
 )
 def game():
 
@@ -379,7 +327,6 @@ def game():
         return jsonify({
             "ok": True
         })
-
 
     try:
 
@@ -390,19 +337,10 @@ def game():
         if not body:
 
             return jsonify({
-
                 "ok": False,
-
                 "message":
                     "Aucune donnée reçue."
-
             }), 400
-
-
-        print(
-            "Données reçues :",
-            body
-        )
 
 
         # =========================
@@ -417,12 +355,9 @@ def game():
         if not init_data:
 
             return jsonify({
-
                 "ok": False,
-
                 "message":
                     "Veuillez ouvrir le jeu depuis Telegram."
-
             }), 403
 
 
@@ -431,12 +366,9 @@ def game():
         ):
 
             return jsonify({
-
                 "ok": False,
-
                 "message":
                     "Données Telegram invalides."
-
             }), 403
 
 
@@ -444,38 +376,36 @@ def game():
             init_data
         )
 
-
         if not telegram_id:
 
             return jsonify({
-
                 "ok": False,
-
                 "message":
                     "Identifiant Telegram introuvable."
-
             }), 403
 
 
         # =========================
-        # DONNEES JOUEUR
+        # DONNEES
         # =========================
 
-        nom = body.get(
-            "nom",
-            ""
-        )
+        nom = str(
+            body.get("nom", "")
+        ).strip()
 
-        prenom = body.get(
-            "prenom",
-            ""
-        )
+        prenom = str(
+            body.get("prenom", "")
+        ).strip()
 
         nom_prenom = (
-            str(nom).strip()
-            + " "
-            + str(prenom).strip()
+            nom + " " + prenom
         ).strip()
+
+
+        resultat = body.get(
+            "resultat",
+            "jeu_en_cours"
+        )
 
 
         player_data = {
@@ -487,52 +417,167 @@ def game():
                 nom_prenom,
 
             "pays":
-                body.get(
-                    "pays",
-                    ""
-                ),
+                body.get("pays", ""),
 
             "ville":
-                body.get(
-                    "ville",
-                    ""
-                ),
+                body.get("ville", ""),
 
             "adresse":
-                body.get(
-                    "adresse",
-                    ""
-                ),
+                body.get("adresse", ""),
 
             "telephone":
-                body.get(
-                    "telephone",
-                    ""
-                ),
+                body.get("telephone", ""),
+
+            "tentative1":
+                body.get("tentative1", ""),
+
+            "tentative2":
+                body.get("tentative2", ""),
+
+            "tentative3":
+                body.get("tentative3", ""),
 
             "resultat":
-                body.get(
-                    "resultat",
-                    "jeu_en_cours"
-                ),
+                resultat,
 
             "date":
                 datetime.now(
                     timezone.utc
                 ).isoformat()
-
         }
 
 
         # =========================
-        # DEBUT DE PARTIE
+        # NOUVELLE PARTICIPATION
         # =========================
 
-        if (
-            player_data["resultat"]
-            == "jeu_en_cours"
-        ):
+        if resultat == "jeu_en_cours":
 
-            google_data = {
+            response = send_to_google({
 
                 "action":
+                    "start",
+
+                **player_data
+
+            })
+
+
+            if response.get(
+                "alreadyPlayed"
+            ):
+
+                return jsonify({
+
+                    "ok": False,
+
+                    "message":
+                        "🚫 Vous avez déjà participé à ce jeu. Une seule participation est autorisée."
+
+                }), 409
+
+
+            if not response.get(
+                "success"
+            ):
+
+                return jsonify({
+
+                    "ok": False,
+
+                    "message":
+                        response.get(
+                            "message",
+                            "Impossible d'autoriser la participation."
+                        )
+
+                }), 502
+
+
+            return jsonify({
+
+                "ok": True,
+
+                "message":
+                    "Jeu autorisé."
+
+            }), 200
+
+
+        # =========================
+        # RESULTAT FINAL
+        # =========================
+
+        response = send_to_google({
+
+            "action":
+                "result",
+
+            **player_data
+
+        })
+
+
+        if not response.get(
+            "success"
+        ):
+
+            return jsonify({
+
+                "ok": False,
+
+                "message":
+                    "Impossible d'enregistrer le résultat."
+
+            }), 502
+
+
+        return jsonify({
+
+            "ok": True,
+
+            "message":
+                "Résultat enregistré."
+
+        }), 200
+
+
+    except Exception as error:
+
+        print(
+            "ERREUR /api/game :",
+            repr(error)
+        )
+
+        return jsonify({
+
+            "ok": False,
+
+            "message":
+                "Erreur serveur."
+
+        }), 500
+
+
+# =========================
+# DEMARRAGE
+# =========================
+
+if __name__ == "__main__":
+
+    print(
+        "Serveur Flask démarré."
+    )
+
+    telegram_thread = threading.Thread(
+        target=start_telegram_thread,
+        daemon=True
+    )
+
+    telegram_thread.start()
+
+    app.run(
+        host="0.0.0.0",
+        port=PORT,
+        debug=False
+    )
