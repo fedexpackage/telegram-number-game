@@ -38,6 +38,13 @@ ADMIN_CHAT_ID = os.environ["ADMIN_CHAT_ID"]
 PORT = int(os.environ.get("PORT", "10000"))
 GAME_URL = os.environ.get("GAME_URL", "https://telegram-number-game-3.onrender.com")
 
+# =========================================================
+# ADMINS AUTORISÉS À REJOUER À L'INFINI
+# Variable Render : ADMIN_IDS = "123456789,987654321"
+# =========================================================
+ADMIN_IDS_STR = os.environ.get("ADMIN_IDS", "")
+ADMIN_IDS = [x.strip() for x in ADMIN_IDS_STR.split(",") if x.strip()]
+
 app = Flask(__name__)
 
 # =========================================================
@@ -102,12 +109,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     args = context.args or []
 
+    # ------- Réclamation -------
     if args and args[0].lower() == "claim":
         context.user_data.clear()
         context.user_data["lang"] = lang
         await update.message.reply_text(t("claim_intro", lang))
         return CLAIM_NOM
 
+    # ------- Jeu -------
     keyboard = [[
         InlineKeyboardButton(
             t("play_button", lang),
@@ -323,22 +332,28 @@ def api_start():
         telegram_id = get_telegram_user_id(init_data)
         lang = get_telegram_lang(init_data)
 
-        check = send_to_google({
-            "action": "check",
-            "telegram_id": telegram_id
-        })
-        if check.get("alreadyPlayed"):
-            return jsonify({
-                "ok": False,
-                "message": t("already_played", lang)
-            }), 409
+        # ---- MODE ADMIN : les admins peuvent rejouer à l'infini ----
+        is_admin = telegram_id in ADMIN_IDS
 
+        if not is_admin:
+            check = send_to_google({
+                "action": "check",
+                "telegram_id": telegram_id
+            })
+            if check.get("alreadyPlayed"):
+                return jsonify({
+                    "ok": False,
+                    "message": t("already_played", lang)
+                }), 409
+
+        # Générer 4 cases gagnantes parmi 12
         winning = secrets.SystemRandom().sample(range(12), 4)
 
         GAMES[telegram_id] = {
             "winning": winning,
             "tries_left": 3,
             "played": [],
+            "is_admin": is_admin,
             "date": datetime.now(timezone.utc).isoformat()
         }
 
@@ -347,6 +362,7 @@ def api_start():
             "nb_cases": 12,
             "tries_left": 3,
             "lang": lang,
+            "is_admin": is_admin,
             "choose_case": t("choose_case", lang),
             "tries_left_text": t("tries_left", lang, n=3)
         }), 200
@@ -393,23 +409,30 @@ def api_choose():
         partie["played"].append(case)
         partie["tries_left"] -= 1
 
+        is_admin = partie.get("is_admin", False)
+
         # ---------------- GAGNÉ ----------------
         if case in partie["winning"]:
-            send_to_google({
-                "action": "result",
-                "telegram_id": telegram_id,
-                "resultat": "gagne",
-                "case_choisie": case,
-                "tentatives": partie["played"],
-                "lang": lang,
-                "date": datetime.now(timezone.utc).isoformat()
-            })
-            notify_admin(
-                f"🎉 NOUVEAU GAGNANT\n"
-                f"Telegram ID : {telegram_id}\n"
-                f"Case : {case + 1}\n"
-                f"Langue : {lang}"
-            )
+            # Les admins ne polluent PAS Google Sheets
+            if not is_admin:
+                send_to_google({
+                    "action": "result",
+                    "telegram_id": telegram_id,
+                    "resultat": "gagne",
+                    "case_choisie": case,
+                    "tentatives": partie["played"],
+                    "lang": lang,
+                    "date": datetime.now(timezone.utc).isoformat()
+                })
+                notify_admin(
+                    f"🎉 NOUVEAU GAGNANT\n"
+                    f"Telegram ID : {telegram_id}\n"
+                    f"Case : {case + 1}\n"
+                    f"Langue : {lang}"
+                )
+            else:
+                print(f"[ADMIN TEST] Gagné - ID: {telegram_id}")
+
             del GAMES[telegram_id]
             return jsonify({
                 "ok": True,
@@ -419,14 +442,19 @@ def api_choose():
 
         # ---------------- PERDU ----------------
         if partie["tries_left"] == 0:
-            send_to_google({
-                "action": "result",
-                "telegram_id": telegram_id,
-                "resultat": "perdu",
-                "tentatives": partie["played"],
-                "lang": lang,
-                "date": datetime.now(timezone.utc).isoformat()
-            })
+            # Les admins ne polluent PAS Google Sheets
+            if not is_admin:
+                send_to_google({
+                    "action": "result",
+                    "telegram_id": telegram_id,
+                    "resultat": "perdu",
+                    "tentatives": partie["played"],
+                    "lang": lang,
+                    "date": datetime.now(timezone.utc).isoformat()
+                })
+            else:
+                print(f"[ADMIN TEST] Perdu - ID: {telegram_id}")
+
             winning_1based = [c + 1 for c in partie["winning"]]
             del GAMES[telegram_id]
             return jsonify({
@@ -468,5 +496,6 @@ def health():
 # =========================================================
 if __name__ == "__main__":
     print("Flask démarré.")
+    print(f"Admins autorisés : {ADMIN_IDS}")
     threading.Thread(target=start_telegram_thread, daemon=True).start()
     app.run(host="0.0.0.0", port=PORT, debug=False)
