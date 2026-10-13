@@ -89,7 +89,6 @@ const langFromUrl = params.get("lang") || "en";
 
 const initData = tg.initData;
 
-// Traductions côté client (fallback si serveur indisponible)
 const TEXTS = {
   fr: {
     title: "🎁 Trouvez une case gagnante !",
@@ -118,7 +117,7 @@ const TEXTS = {
   }
 };
 
-const txt = TEXTS[langFromUrl] || TEXTS.fr;
+const txt = TEXTS[langFromUrl] || TEXTS.en;
 document.getElementById("title").textContent = txt.title;
 document.getElementById("loading").textContent = txt.loading;
 
