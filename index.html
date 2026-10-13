@@ -21,12 +21,7 @@
   }
   h1 { font-size: 22px; margin-bottom: 10px; }
   .info { font-size: 16px; opacity: 0.85; margin-bottom: 20px; }
-  .subtitle {
-    font-size: 15px;
-    opacity: 0.75;
-    margin-bottom: 20px;
-    line-height: 1.4;
-  }
+  .subtitle { font-size: 15px; opacity: 0.75; margin-bottom: 20px; line-height: 1.4; }
   .grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -50,42 +45,17 @@
   .case.win { background: linear-gradient(145deg, #16a34a, #15803d); }
   .case.lose { background: linear-gradient(145deg, #dc2626, #991b1b); }
   .case:disabled { opacity: 0.6; cursor: not-allowed; }
-  .sticker {
-    font-size: 100px;
-    margin: 20px 0;
-    animation: pop 0.6s ease-out;
-  }
+  .sticker { font-size: 100px; margin: 20px 0; animation: pop 0.6s ease-out; }
   @keyframes pop {
     0% { transform: scale(0); opacity: 0; }
     60% { transform: scale(1.2); }
     100% { transform: scale(1); opacity: 1; }
   }
-  .message {
-    font-size: 18px;
-    margin-top: 15px;
-    line-height: 1.5;
-    white-space: pre-line;
-  }
+  .message { font-size: 18px; margin-top: 15px; line-height: 1.5; white-space: pre-line; }
   .hidden { display: none; }
-  .loading {
-    font-size: 20px;
-    opacity: 0.9;
-  }
-
-  /* Formulaire */
-  .form {
-    width: 100%;
-    max-width: 400px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-top: 20px;
-  }
-  .form label {
-    font-size: 14px;
-    text-align: left;
-    opacity: 0.85;
-  }
+  .loading { font-size: 20px; opacity: 0.9; }
+  .form { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 12px; margin-top: 20px; }
+  .form label { font-size: 14px; text-align: left; opacity: 0.85; }
   .form input {
     padding: 14px;
     border-radius: 10px;
@@ -94,14 +64,9 @@
     color: #fff;
     font-size: 16px;
     outline: none;
-    transition: border 0.2s;
   }
-  .form input:focus {
-    border-color: #16537e;
-  }
-  .form input::placeholder {
-    color: rgba(255, 255, 255, 0.35);
-  }
+  .form input:focus { border-color: #16537e; }
+  .form input::placeholder { color: rgba(255, 255, 255, 0.35); }
   .form button {
     padding: 14px;
     border-radius: 10px;
@@ -112,26 +77,16 @@
     font-weight: bold;
     cursor: pointer;
     margin-top: 10px;
-    transition: transform 0.15s;
   }
   .form button:active { transform: scale(0.97); }
-  .form button:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-  .error {
-    color: #f87171;
-    font-size: 14px;
-    margin-top: 8px;
-  }
+  .form button:disabled { opacity: 0.6; cursor: not-allowed; }
+  .error { color: #f87171; font-size: 14px; margin-top: 8px; }
 </style>
 </head>
 <body>
 
-<!-- LOADING -->
 <div id="loading" class="loading">⏳ Chargement...</div>
 
-<!-- FORMULAIRE D'INSCRIPTION -->
 <div id="register-section" class="hidden">
   <h1 id="register-title">📝 Inscription</h1>
   <p class="subtitle" id="register-subtitle">Remplissez vos informations pour commencer.</p>
@@ -154,7 +109,6 @@
   </div>
 </div>
 
-<!-- JEU -->
 <div id="game" class="hidden">
   <h1 id="title">🎁 Trouvez une case gagnante !</h1>
   <p class="info" id="info"></p>
@@ -173,9 +127,8 @@ const langFromUrl = params.get("lang") || "en";
 
 const initData = tg.initData;
 
-// =========================================================
-// TRADUCTIONS CLIENT (fallback)
-// =========================================================
+console.log("initData length:", initData ? initData.length : 0);
+
 const TEXTS = {
   fr: {
     register_title: "📝 Inscription",
@@ -246,9 +199,6 @@ const TEXTS = {
 
 const txt = TEXTS[langFromUrl] || TEXTS.en;
 
-// =========================================================
-// REMPLIR LES TEXTES
-// =========================================================
 document.getElementById("loading").textContent = txt.loading;
 document.getElementById("register-title").textContent = txt.register_title;
 document.getElementById("register-subtitle").textContent = txt.register_subtitle;
@@ -259,12 +209,7 @@ document.getElementById("label-email").textContent = txt.register_email;
 document.getElementById("register-btn").textContent = txt.register_submit;
 document.getElementById("title").textContent = txt.title;
 
-// =========================================================
-// ÉTAPE 1 — INSCRIPTION
-// =========================================================
-async function checkRegistration() {
-  // On affiche directement le formulaire
-  // Le serveur refusera si déjà inscrit
+function showRegister() {
   document.getElementById("loading").classList.add("hidden");
   document.getElementById("register-section").classList.remove("hidden");
 }
@@ -280,23 +225,10 @@ async function submitRegister() {
 
   errorDiv.textContent = "";
 
-  // Validations côté client
-  if (!nom || nom.length < 2) {
-    errorDiv.textContent = "❌ Nom invalide.";
-    return;
-  }
-  if (!tel || tel.length < 8) {
-    errorDiv.textContent = "❌ Numéro invalide.";
-    return;
-  }
-  if (!adresse || adresse.length < 3) {
-    errorDiv.textContent = "❌ Adresse invalide.";
-    return;
-  }
-  if (!email || !email.includes("@")) {
-    errorDiv.textContent = "❌ Email invalide.";
-    return;
-  }
+  if (!nom || nom.length < 2) { errorDiv.textContent = "Nom invalide."; return; }
+  if (!tel || tel.length < 8) { errorDiv.textContent = "Numero invalide."; return; }
+  if (!adresse || adresse.length < 3) { errorDiv.textContent = "Adresse invalide."; return; }
+  if (!email || !email.includes("@")) { errorDiv.textContent = "Email invalide."; return; }
 
   btn.disabled = true;
   btn.textContent = txt.register_loading;
@@ -306,7 +238,7 @@ async function submitRegister() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        initData,
+        initData: initData,
         nom_complet: nom,
         telephone: tel,
         adresse: adresse,
@@ -317,18 +249,17 @@ async function submitRegister() {
     const data = await res.json();
 
     if (!data.ok) {
-      errorDiv.textContent = data.message || "❌ Erreur";
+      errorDiv.textContent = data.message || "Erreur";
       btn.disabled = false;
       btn.textContent = txt.register_submit;
       return;
     }
 
-    // Inscription réussie → passer au jeu
     await startGame();
 
   } catch (e) {
     console.error(e);
-    errorDiv.textContent = "❌ Erreur réseau";
+    errorDiv.textContent = "Erreur reseau";
     btn.disabled = false;
     btn.textContent = txt.register_submit;
   }
@@ -336,15 +267,12 @@ async function submitRegister() {
 
 document.getElementById("register-btn").addEventListener("click", submitRegister);
 
-// =========================================================
-// ÉTAPE 2 — JEU
-// =========================================================
 async function startGame() {
   try {
     const res = await fetch("/api/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ initData })
+      body: JSON.stringify({ initData: initData })
     });
     const data = await res.json();
 
@@ -371,7 +299,7 @@ async function startGame() {
     buildGrid();
   } catch (e) {
     console.error(e);
-    document.getElementById("loading").innerHTML = txt.error + " réseau";
+    document.getElementById("loading").innerHTML = txt.error + " reseau";
   }
 }
 
@@ -394,7 +322,7 @@ async function playCase(index, btn) {
     const res = await fetch("/api/choose", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ initData, case: index })
+      body: JSON.stringify({ initData: initData, case: index })
     });
     const data = await res.json();
 
@@ -423,33 +351,30 @@ async function playCase(index, btn) {
   } catch (e) {
     console.error(e);
     btn.disabled = false;
-    alert("Erreur réseau");
+    alert("Erreur reseau");
   }
 }
 
 function showSticker(emoji, timeout) {
   const container = document.getElementById("sticker-container");
-  container.innerHTML = `<div class="sticker">${emoji}</div>`;
+  container.innerHTML = '<div class="sticker">' + emoji + '</div>';
   if (timeout) {
-    setTimeout(() => { container.innerHTML = ""; }, timeout);
+    setTimeout(function() { container.innerHTML = ""; }, timeout);
   }
 }
 
 function disableAll() {
-  document.querySelectorAll(".case").forEach(b => b.disabled = true);
+  document.querySelectorAll(".case").forEach(function(b) { b.disabled = true; });
 }
 
 function revealWinning(list) {
-  list.forEach(n => {
-    const btn = document.querySelectorAll(".case")[n - 1];
+  list.forEach(function(n) {
+    var btn = document.querySelectorAll(".case")[n - 1];
     if (btn) btn.classList.add("win");
   });
 }
 
-// =========================================================
-// DÉMARRAGE
-// =========================================================
-checkRegistration();
+showRegister();
 </script>
 </body>
 </html>
