@@ -1,4 +1,3 @@
-
 import os
 import json
 import hmac
@@ -214,7 +213,7 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================================================
-# LANCEMENT BOT
+# LANCEMENT BOT TELEGRAM
 # =========================================================
 async def run_telegram_bot():
     telegram_app = Application.builder().token(BOT_TOKEN).build()
@@ -240,3 +239,234 @@ async def run_telegram_bot():
 
 def start_telegram_thread():
     asyncio.run(run_telegram_bot())
+
+
+# =========================================================
+# VÉRIFICATION TELEGRAM
+# =========================================================
+def verify_telegram_data(init_data):
+    if not init_data:
+        return False
+    try:
+        data = dict(parse_qsl(init_data, keep_blank_values=True))
+        received_hash = data.pop("hash", None)
+        if not received_hash:
+            return False
+
+        auth_date = int(data.get("auth_date", 0))
+        if time.time() - auth_date > 3600:
+            return False
+
+        data_check_string = "\n".join(
+            f"{k}={data[k]}" for k in sorted(data)
+        )
+        secret_key = hmac.new(
+            b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256
+        ).digest()
+        calculated = hmac.new(
+            secret_key, data_check_string.encode(), hashlib.sha256
+        ).hexdigest()
+        return hmac.compare_digest(calculated, received_hash)
+    except Exception as e:
+        print("Erreur verify:", repr(e))
+        return False
+
+
+def get_telegram_user_id(init_data):
+    try:
+        data = dict(parse_qsl(init_data, keep_blank_values=True))
+        user = json.loads(data.get("user", "{}"))
+        uid = user.get("id")
+        return str(uid) if uid else None
+    except Exception:
+        return None
+
+
+def get_telegram_lang(init_data):
+    try:
+        data = dict(parse_qsl(init_data, keep_blank_values=True))
+        user = json.loads(data.get("user", "{}"))
+        code = (user.get("language_code") or "fr")[:2]
+        return code if code in ("fr", "en", "ar", "pt", "es") else "fr"
+    except Exception:
+        return "fr"
+
+
+# =========================================================
+# CORS
+# =========================================================
+@app.after_request
+def add_cors(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return response
+
+
+# =========================================================
+# API : DÉMARRER UNE PARTIE
+# =========================================================
+@app.route("/api/start", methods=["POST", "OPTIONS"])
+def api_start():
+    if request.method == "OPTIONS":
+        return jsonify({"ok": True})
+
+    try:
+        body = request.get_json(silent=True) or {}
+        init_data = body.get("initData", "")
+
+        if not init_data:
+            return jsonify({"ok": False, "message": "initData manquant"}), 403
+        if not verify_telegram_data(init_data):
+            return jsonify({"ok": False, "message": "Non autorisé"}), 403
+
+        telegram_id = get_telegram_user_id(init_data)
+        lang = get_telegram_lang(init_data)
+
+        check = send_to_google({
+            "action": "check",
+            "telegram_id": telegram_id
+        })
+        if check.get("alreadyPlayed"):
+            return jsonify({
+                "ok": False,
+                "message": t("already_played", lang)
+            }), 409
+
+        winning = secrets.SystemRandom().sample(range(12), 4)
+
+        GAMES[telegram_id] = {
+            "winning": winning,
+            "tries_left": 3,
+            "played": [],
+            "date": datetime.now(timezone.utc).isoformat()
+        }
+
+        return jsonify({
+            "ok": True,
+            "nb_cases": 12,
+            "tries_left": 3,
+            "lang": lang,
+            "choose_case": t("choose_case", lang),
+            "tries_left_text": t("tries_left", lang, n=3)
+        }), 200
+
+    except Exception as e:
+        print("ERREUR /api/start:", repr(e))
+        return jsonify({"ok": False, "message": "Erreur serveur"}), 500
+
+
+# =========================================================
+# API : JOUER UNE CASE
+# =========================================================
+@app.route("/api/choose", methods=["POST", "OPTIONS"])
+def api_choose():
+    if request.method == "OPTIONS":
+        return jsonify({"ok": True})
+
+    try:
+        body = request.get_json(silent=True) or {}
+        init_data = body.get("initData", "")
+
+        if not verify_telegram_data(init_data):
+            return jsonify({"ok": False, "message": "Non autorisé"}), 403
+
+        telegram_id = get_telegram_user_id(init_data)
+        lang = get_telegram_lang(init_data)
+        partie = GAMES.get(telegram_id)
+
+        if not partie:
+            return jsonify({"ok": False, "message": "Aucune partie"}), 400
+
+        if partie["tries_left"] <= 0:
+            return jsonify({"ok": False, "message": "Plus d'essais"}), 400
+
+        try:
+            case = int(body.get("case"))
+            if not (0 <= case <= 11):
+                raise ValueError
+            if case in partie["played"]:
+                return jsonify({"ok": False, "message": "Case déjà jouée"}), 400
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "message": "Case invalide"}), 400
+
+        partie["played"].append(case)
+        partie["tries_left"] -= 1
+
+        # ---------------- GAGNÉ ----------------
+        if case in partie["winning"]:
+            send_to_google({
+                "action": "result",
+                "telegram_id": telegram_id,
+                "resultat": "gagne",
+                "case_choisie": case,
+                "tentatives": partie["played"],
+                "lang": lang,
+                "date": datetime.now(timezone.utc).isoformat()
+            })
+            notify_admin(
+                f"🎉 NOUVEAU GAGNANT\n"
+                f"Telegram ID : {telegram_id}\n"
+                f"Case : {case + 1}\n"
+                f"Langue : {lang}"
+            )
+            del GAMES[telegram_id]
+            return jsonify({
+                "ok": True,
+                "resultat": "gagne",
+                "message": t("case_won", lang, n=case + 1)
+            }), 200
+
+        # ---------------- PERDU ----------------
+        if partie["tries_left"] == 0:
+            send_to_google({
+                "action": "result",
+                "telegram_id": telegram_id,
+                "resultat": "perdu",
+                "tentatives": partie["played"],
+                "lang": lang,
+                "date": datetime.now(timezone.utc).isoformat()
+            })
+            winning_1based = [c + 1 for c in partie["winning"]]
+            del GAMES[telegram_id]
+            return jsonify({
+                "ok": True,
+                "resultat": "perdu",
+                "winning": winning_1based,
+                "message": t("game_lost", lang, cases=winning_1based)
+            }), 200
+
+        # ---------------- EN COURS ----------------
+        return jsonify({
+            "ok": True,
+            "resultat": "en_cours",
+            "tries_left": partie["tries_left"],
+            "message": t("case_lost", lang, n=case + 1) + " " +
+                       t("tries_left", lang, n=partie["tries_left"])
+        }), 200
+
+    except Exception as e:
+        print("ERREUR /api/choose:", repr(e))
+        return jsonify({"ok": False, "message": "Erreur serveur"}), 500
+
+
+# =========================================================
+# PAGE JEU
+# =========================================================
+@app.route("/", methods=["GET"])
+def home():
+    return send_file("index.html")
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"ok": True})
+
+
+# =========================================================
+# LANCEMENT
+# =========================================================
+if __name__ == "__main__":
+    print("Flask démarré.")
+    threading.Thread(target=start_telegram_thread, daemon=True).start()
+    app.run(host="0.0.0.0", port=PORT, debug=False)
