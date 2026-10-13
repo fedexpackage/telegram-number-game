@@ -36,7 +36,7 @@ BOT_TOKEN = os.environ["BOT_TOKEN"]
 GOOGLE_SCRIPT_URL = os.environ["GOOGLE_SCRIPT_URL"]
 ADMIN_CHAT_ID = os.environ["ADMIN_CHAT_ID"]
 PORT = int(os.environ.get("PORT", "10000"))
-GAME_URL = os.environ.get("GAME_URL", "https://telegram-number-game-3.onrender.com")
+GAME_URL = os.environ.get("GAME_URL", "")
 
 # =========================================================
 # ADMINS AUTORISÉS À REJOUER À L'INFINI
@@ -286,7 +286,6 @@ def verify_telegram_data(init_data):
         print(f"🔍 VERIFY: hash reçu     = {received_hash[:30]}...")
         print(f"🔍 VERIFY: hash calculé  = {calculated[:30]}...")
         print(f"🔍 VERIFY: token utilisé = {BOT_TOKEN[:15]}...")
-        print(f"🔍 VERIFY: user_data     = {data.get('user', 'N/A')[:80]}")
 
         result = hmac.compare_digest(calculated, received_hash)
         print(f"🔍 VERIFY: résultat = {result}")
@@ -354,7 +353,6 @@ def api_register():
         adresse = str(body.get("adresse", "")).strip()
         email = str(body.get("email", "")).strip()
 
-        # Validations
         if not re.fullmatch(r"[A-Za-zÀ-ÿ' -]{2,80}", nom):
             return jsonify({
                 "ok": False,
@@ -379,7 +377,6 @@ def api_register():
                 "message": t("register_error_email", lang)
             }), 400
 
-        # Enregistrer dans Google Sheets
         response = send_to_google({
             "action": "register",
             "telegram_id": telegram_id,
@@ -434,10 +431,8 @@ def api_start():
         telegram_id = get_telegram_user_id(init_data)
         lang = get_telegram_lang(init_data)
 
-        # ---- MODE ADMIN ----
         is_admin = telegram_id in ADMIN_IDS
 
-        # Vérifier inscription et partie déjà jouée
         if not is_admin:
             check = send_to_google({
                 "action": "check",
@@ -448,7 +443,7 @@ def api_start():
                 return jsonify({
                     "ok": False,
                     "notRegistered": True,
-                    "message": "❌ Vous devez d'abord vous inscrire."
+                    "message": "Vous devez d'abord vous inscrire."
                 }), 403
 
             if check.get("alreadyPlayed"):
@@ -457,7 +452,6 @@ def api_start():
                     "message": t("already_played", lang)
                 }), 409
 
-        # Générer 4 cases gagnantes parmi 12
         winning = secrets.SystemRandom().sample(range(12), 4)
 
         GAMES[telegram_id] = {
@@ -522,7 +516,6 @@ def api_choose():
 
         is_admin = partie.get("is_admin", False)
 
-        # ---------------- GAGNÉ ----------------
         if case in partie["winning"]:
             if not is_admin:
                 send_to_google({
@@ -550,7 +543,6 @@ def api_choose():
                 "message": t("case_won", lang, n=case + 1)
             }), 200
 
-        # ---------------- PERDU ----------------
         if partie["tries_left"] == 0:
             if not is_admin:
                 send_to_google({
@@ -573,7 +565,6 @@ def api_choose():
                 "message": t("game_lost", lang, cases=winning_1based)
             }), 200
 
-        # ---------------- EN COURS ----------------
         return jsonify({
             "ok": True,
             "resultat": "en_cours",
