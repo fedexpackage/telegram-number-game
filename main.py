@@ -180,7 +180,7 @@ async def claim_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
     response = send_to_google({
         "action": "claim",
         "telegram_id": telegram_id,
-        "nom": nom,
+        "nom_complet": nom,
         "telephone": tel,
         "email": email
     })
@@ -313,6 +313,91 @@ def add_cors(response):
 
 
 # =========================================================
+# API : INSCRIPTION DU JOUEUR
+# =========================================================
+@app.route("/api/register", methods=["POST", "OPTIONS"])
+def api_register():
+    if request.method == "OPTIONS":
+        return jsonify({"ok": True})
+
+    try:
+        body = request.get_json(silent=True) or {}
+        init_data = body.get("initData", "")
+
+        if not init_data:
+            return jsonify({"ok": False, "message": "initData manquant"}), 403
+        if not verify_telegram_data(init_data):
+            return jsonify({"ok": False, "message": "Non autorisé"}), 403
+
+        telegram_id = get_telegram_user_id(init_data)
+        lang = get_telegram_lang(init_data)
+
+        nom = str(body.get("nom_complet", "")).strip()
+        tel = str(body.get("telephone", "")).strip()
+        adresse = str(body.get("adresse", "")).strip()
+        email = str(body.get("email", "")).strip()
+
+        # Validations
+        if not re.fullmatch(r"[A-Za-zÀ-ÿ' -]{2,80}", nom):
+            return jsonify({
+                "ok": False,
+                "message": t("register_error_nom", lang)
+            }), 400
+
+        if not re.fullmatch(r"\+?\d[\d\s-]{7,20}", tel):
+            return jsonify({
+                "ok": False,
+                "message": t("register_error_tel", lang)
+            }), 400
+
+        if len(adresse) < 3:
+            return jsonify({
+                "ok": False,
+                "message": t("register_error_adresse", lang)
+            }), 400
+
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+            return jsonify({
+                "ok": False,
+                "message": t("register_error_email", lang)
+            }), 400
+
+        # Enregistrer dans Google Sheets
+        response = send_to_google({
+            "action": "register",
+            "telegram_id": telegram_id,
+            "nom_complet": nom,
+            "telephone": tel,
+            "adresse": adresse,
+            "email": email,
+            "lang": lang,
+            "date": datetime.now(timezone.utc).isoformat()
+        })
+
+        if response.get("alreadyRegistered"):
+            return jsonify({
+                "ok": False,
+                "alreadyRegistered": True,
+                "message": t("register_already", lang)
+            }), 409
+
+        if not response.get("success"):
+            return jsonify({
+                "ok": False,
+                "message": t("error_server", lang)
+            }), 502
+
+        return jsonify({
+            "ok": True,
+            "message": t("register_success", lang)
+        }), 200
+
+    except Exception as e:
+        print("ERREUR /api/register:", repr(e))
+        return jsonify({"ok": False, "message": "Erreur serveur"}), 500
+
+
+# =========================================================
 # API : DÉMARRER UNE PARTIE
 # =========================================================
 @app.route("/api/start", methods=["POST", "OPTIONS"])
@@ -332,14 +417,23 @@ def api_start():
         telegram_id = get_telegram_user_id(init_data)
         lang = get_telegram_lang(init_data)
 
-        # ---- MODE ADMIN : les admins peuvent rejouer à l'infini ----
+        # ---- MODE ADMIN ----
         is_admin = telegram_id in ADMIN_IDS
 
+        # Vérifier inscription et partie déjà jouée
         if not is_admin:
             check = send_to_google({
                 "action": "check",
                 "telegram_id": telegram_id
             })
+
+            if not check.get("registered"):
+                return jsonify({
+                    "ok": False,
+                    "notRegistered": True,
+                    "message": "❌ Vous devez d'abord vous inscrire."
+                }), 403
+
             if check.get("alreadyPlayed"):
                 return jsonify({
                     "ok": False,
@@ -413,7 +507,6 @@ def api_choose():
 
         # ---------------- GAGNÉ ----------------
         if case in partie["winning"]:
-            # Les admins ne polluent PAS Google Sheets
             if not is_admin:
                 send_to_google({
                     "action": "result",
@@ -442,7 +535,6 @@ def api_choose():
 
         # ---------------- PERDU ----------------
         if partie["tries_left"] == 0:
-            # Les admins ne polluent PAS Google Sheets
             if not is_admin:
                 send_to_google({
                     "action": "result",
