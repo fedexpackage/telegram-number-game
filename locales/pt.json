@@ -1,0 +1,23 @@
+{
+  "welcome": "🎉 Bem-vindo!\n\nVocê está convidado a participar do nosso jogo.\nEncontre uma caixa vencedora entre 12. Você tem 3 tentativas!",
+  "play_button": "🎮 Jogar",
+  "choose_case": "Escolha uma caixa:",
+  "tries_left": "Você tem {n} tentativa(s) restante(s)",
+  "case_lost": "❌ Caixa {n}: perdeu!",
+  "case_won": "🎉 Caixa {n}: GANHOU!",
+  "game_lost": "😢 Que pena! Você não encontrou.\nAs caixas vencedoras eram: {cases}",
+  "game_won": "🏆 PARABÉNS!\n\nVocê ganhou!",
+  "claim_intro": "🏆 Para reclamar seu prêmio, precisamos verificar sua participação.\n\nPor favor, insira seu NOME COMPLETO.",
+  "ask_tel": "Obrigado.\n\nAgora insira seu NÚMERO DE TELEFONE.",
+  "ask_email": "Muito bem.\n\nAgora insira seu EMAIL.",
+  "invalid_nom": "❌ Nome inválido.",
+  "invalid_tel": "❌ Número inválido. Exemplo: +22997000000",
+  "invalid_email": "❌ Email inválido.",
+  "already_claimed": "⚠️ Esta reclamação já foi registrada.",
+  "not_eligible": "❌ Sua participação não corresponde a uma vitória validada.",
+  "claim_success": "✅ Seu pedido foi registrado.\n\nVamos verificar e conceder seu prêmio.\n\nPor favor, aguarde.",
+  "cancelled": "❌ Reclamação cancelada.",
+  "already_played": "🚫 Você já jogou este jogo.\n\nApenas uma participação permitida.",
+  "error_server": "❌ Erro no servidor.",
+  "unauthorized": "❌ Abra o jogo pelo Telegram."
+}
