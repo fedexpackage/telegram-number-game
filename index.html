@@ -21,6 +21,12 @@
   }
   h1 { font-size: 22px; margin-bottom: 10px; }
   .info { font-size: 16px; opacity: 0.85; margin-bottom: 20px; }
+  .subtitle {
+    font-size: 15px;
+    opacity: 0.75;
+    margin-bottom: 20px;
+    line-height: 1.4;
+  }
   .grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -65,12 +71,90 @@
     font-size: 20px;
     opacity: 0.9;
   }
+
+  /* Formulaire */
+  .form {
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 20px;
+  }
+  .form label {
+    font-size: 14px;
+    text-align: left;
+    opacity: 0.85;
+  }
+  .form input {
+    padding: 14px;
+    border-radius: 10px;
+    border: 1px solid #0f3460;
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+    font-size: 16px;
+    outline: none;
+    transition: border 0.2s;
+  }
+  .form input:focus {
+    border-color: #16537e;
+  }
+  .form input::placeholder {
+    color: rgba(255, 255, 255, 0.35);
+  }
+  .form button {
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    background: linear-gradient(145deg, #16a34a, #15803d);
+    color: #fff;
+    font-size: 17px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: transform 0.15s;
+  }
+  .form button:active { transform: scale(0.97); }
+  .form button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .error {
+    color: #f87171;
+    font-size: 14px;
+    margin-top: 8px;
+  }
 </style>
 </head>
 <body>
 
+<!-- LOADING -->
 <div id="loading" class="loading">⏳ Chargement...</div>
 
+<!-- FORMULAIRE D'INSCRIPTION -->
+<div id="register-section" class="hidden">
+  <h1 id="register-title">📝 Inscription</h1>
+  <p class="subtitle" id="register-subtitle">Remplissez vos informations pour commencer.</p>
+
+  <div class="form">
+    <label id="label-nom" for="input-nom">Nom complet</label>
+    <input id="input-nom" type="text" placeholder="..." autocomplete="name">
+
+    <label id="label-tel" for="input-tel">Téléphone</label>
+    <input id="input-tel" type="tel" placeholder="+229..." autocomplete="tel">
+
+    <label id="label-adresse" for="input-adresse">Adresse</label>
+    <input id="input-adresse" type="text" placeholder="Ville, quartier..." autocomplete="street-address">
+
+    <label id="label-email" for="input-email">Email</label>
+    <input id="input-email" type="email" placeholder="exemple@email.com" autocomplete="email">
+
+    <button id="register-btn" type="button">Commencer le jeu</button>
+    <div id="register-error" class="error"></div>
+  </div>
+</div>
+
+<!-- JEU -->
 <div id="game" class="hidden">
   <h1 id="title">🎁 Trouvez une case gagnante !</h1>
   <p class="info" id="info"></p>
@@ -89,28 +173,71 @@ const langFromUrl = params.get("lang") || "en";
 
 const initData = tg.initData;
 
+// =========================================================
+// TRADUCTIONS CLIENT (fallback)
+// =========================================================
 const TEXTS = {
   fr: {
+    register_title: "📝 Inscription",
+    register_subtitle: "Remplissez vos informations pour commencer.",
+    register_nom: "Nom complet",
+    register_tel: "Téléphone",
+    register_adresse: "Adresse",
+    register_email: "Email",
+    register_submit: "Commencer le jeu",
+    register_loading: "Vérification...",
     title: "🎁 Trouvez une case gagnante !",
     loading: "⏳ Chargement...",
     error: "❌ Erreur"
   },
   en: {
+    register_title: "📝 Registration",
+    register_subtitle: "Fill in your information to start.",
+    register_nom: "Full name",
+    register_tel: "Phone",
+    register_adresse: "Address",
+    register_email: "Email",
+    register_submit: "Start the game",
+    register_loading: "Verifying...",
     title: "🎁 Find a winning box!",
     loading: "⏳ Loading...",
     error: "❌ Error"
   },
   ar: {
+    register_title: "📝 التسجيل",
+    register_subtitle: "املأ معلوماتك للبدء.",
+    register_nom: "الاسم الكامل",
+    register_tel: "الهاتف",
+    register_adresse: "العنوان",
+    register_email: "البريد الإلكتروني",
+    register_submit: "ابدأ اللعبة",
+    register_loading: "جار التحقق...",
     title: "🎁 اعثر على صندوق فائز!",
     loading: "⏳ جار التحميل...",
     error: "❌ خطأ"
   },
   pt: {
+    register_title: "📝 Registro",
+    register_subtitle: "Preencha suas informações para começar.",
+    register_nom: "Nome completo",
+    register_tel: "Telefone",
+    register_adresse: "Endereço",
+    register_email: "Email",
+    register_submit: "Começar o jogo",
+    register_loading: "Verificando...",
     title: "🎁 Encontre uma caixa vencedora!",
     loading: "⏳ Carregando...",
     error: "❌ Erro"
   },
   es: {
+    register_title: "📝 Registro",
+    register_subtitle: "Rellena tus datos para comenzar.",
+    register_nom: "Nombre completo",
+    register_tel: "Teléfono",
+    register_adresse: "Dirección",
+    register_email: "Correo electrónico",
+    register_submit: "Comenzar el juego",
+    register_loading: "Verificando...",
     title: "🎁 ¡Encuentra una casilla ganadora!",
     loading: "⏳ Cargando...",
     error: "❌ Error"
@@ -118,9 +245,100 @@ const TEXTS = {
 };
 
 const txt = TEXTS[langFromUrl] || TEXTS.en;
-document.getElementById("title").textContent = txt.title;
-document.getElementById("loading").textContent = txt.loading;
 
+// =========================================================
+// REMPLIR LES TEXTES
+// =========================================================
+document.getElementById("loading").textContent = txt.loading;
+document.getElementById("register-title").textContent = txt.register_title;
+document.getElementById("register-subtitle").textContent = txt.register_subtitle;
+document.getElementById("label-nom").textContent = txt.register_nom;
+document.getElementById("label-tel").textContent = txt.register_tel;
+document.getElementById("label-adresse").textContent = txt.register_adresse;
+document.getElementById("label-email").textContent = txt.register_email;
+document.getElementById("register-btn").textContent = txt.register_submit;
+document.getElementById("title").textContent = txt.title;
+
+// =========================================================
+// ÉTAPE 1 — INSCRIPTION
+// =========================================================
+async function checkRegistration() {
+  // On affiche directement le formulaire
+  // Le serveur refusera si déjà inscrit
+  document.getElementById("loading").classList.add("hidden");
+  document.getElementById("register-section").classList.remove("hidden");
+}
+
+async function submitRegister() {
+  const nom = document.getElementById("input-nom").value.trim();
+  const tel = document.getElementById("input-tel").value.trim();
+  const adresse = document.getElementById("input-adresse").value.trim();
+  const email = document.getElementById("input-email").value.trim();
+
+  const btn = document.getElementById("register-btn");
+  const errorDiv = document.getElementById("register-error");
+
+  errorDiv.textContent = "";
+
+  // Validations côté client
+  if (!nom || nom.length < 2) {
+    errorDiv.textContent = "❌ Nom invalide.";
+    return;
+  }
+  if (!tel || tel.length < 8) {
+    errorDiv.textContent = "❌ Numéro invalide.";
+    return;
+  }
+  if (!adresse || adresse.length < 3) {
+    errorDiv.textContent = "❌ Adresse invalide.";
+    return;
+  }
+  if (!email || !email.includes("@")) {
+    errorDiv.textContent = "❌ Email invalide.";
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = txt.register_loading;
+
+  try {
+    const res = await fetch("/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        initData,
+        nom_complet: nom,
+        telephone: tel,
+        adresse: adresse,
+        email: email
+      })
+    });
+
+    const data = await res.json();
+
+    if (!data.ok) {
+      errorDiv.textContent = data.message || "❌ Erreur";
+      btn.disabled = false;
+      btn.textContent = txt.register_submit;
+      return;
+    }
+
+    // Inscription réussie → passer au jeu
+    await startGame();
+
+  } catch (e) {
+    console.error(e);
+    errorDiv.textContent = "❌ Erreur réseau";
+    btn.disabled = false;
+    btn.textContent = txt.register_submit;
+  }
+}
+
+document.getElementById("register-btn").addEventListener("click", submitRegister);
+
+// =========================================================
+// ÉTAPE 2 — JEU
+// =========================================================
 async function startGame() {
   try {
     const res = await fetch("/api/start", {
@@ -131,11 +349,14 @@ async function startGame() {
     const data = await res.json();
 
     if (!data.ok) {
+      document.getElementById("register-section").classList.add("hidden");
+      document.getElementById("loading").classList.remove("hidden");
       document.getElementById("loading").innerHTML =
         txt.error + " : " + (data.message || "Erreur");
       return;
     }
 
+    document.getElementById("register-section").classList.add("hidden");
     document.getElementById("loading").classList.add("hidden");
     document.getElementById("game").classList.remove("hidden");
 
@@ -225,7 +446,10 @@ function revealWinning(list) {
   });
 }
 
-startGame();
+// =========================================================
+// DÉMARRAGE
+// =========================================================
+checkRegistration();
 </script>
 </body>
 </html>
