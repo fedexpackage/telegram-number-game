@@ -1,7 +1,7 @@
 import json
 import os
 
-DEFAULT_LANG = "fr"
+DEFAULT_LANG = "en"
 SUPPORTED_LANGS = ["fr", "en", "ar", "pt", "es"]
 
 TRANSLATIONS = {}
