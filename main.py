@@ -286,10 +286,10 @@ def get_telegram_lang(init_data):
     try:
         data = dict(parse_qsl(init_data, keep_blank_values=True))
         user = json.loads(data.get("user", "{}"))
-        code = (user.get("language_code") or "fr")[:2]
-        return code if code in ("fr", "en", "ar", "pt", "es") else "fr"
+        code = (user.get("language_code") or "en")[:2]
+        return code if code in ("fr", "en", "ar", "pt", "es") else "en"
     except Exception:
-        return "fr"
+        return "en"
 
 
 # =========================================================
