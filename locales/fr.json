@@ -1,1 +1,23 @@
-
+{
+  "welcome": "🎉 Bienvenue !\n\nVous êtes invité à participer à notre jeu.\nTrouvez une case gagnante parmi 12. Vous avez 3 essais !",
+  "play_button": "🎮 Jouer",
+  "choose_case": "Choisissez une case :",
+  "tries_left": "Il vous reste {n} essai(s)",
+  "case_lost": "❌ Case {n} : perdu !",
+  "case_won": "🎉 Case {n} : GAGNÉ !",
+  "game_lost": "😢 Dommage ! Vous n'avez pas trouvé.\nLes cases gagnantes étaient : {cases}",
+  "game_won": "🏆 FÉLICITATIONS !\n\nVous avez gagné !",
+  "claim_intro": "🏆 Pour réclamer votre gain, nous devons vérifier votre participation.\n\nVeuillez indiquer votre NOM COMPLET.",
+  "ask_tel": "Merci.\n\nVeuillez maintenant indiquer votre NUMÉRO DE TÉLÉPHONE.",
+  "ask_email": "Très bien.\n\nVeuillez maintenant indiquer votre ADRESSE EMAIL.",
+  "invalid_nom": "❌ Nom invalide. Utilisez uniquement des lettres.",
+  "invalid_tel": "❌ Numéro invalide. Exemple : +22997000000",
+  "invalid_email": "❌ Adresse email invalide.",
+  "already_claimed": "⚠️ Cette réclamation a déjà été enregistrée.",
+  "not_eligible": "❌ Votre participation ne correspond pas à un gain validé.",
+  "claim_success": "✅ Votre demande a été enregistrée.\n\nNous allons procéder aux vérifications et vous attribuer votre lot.\n\nMerci de patienter.",
+  "cancelled": "❌ Réclamation annulée.",
+  "already_played": "🚫 Vous avez déjà participé à ce jeu.\n\nUne seule participation est autorisée.",
+  "error_server": "❌ Erreur serveur. Réessayez plus tard.",
+  "unauthorized": "❌ Veuillez ouvrir le jeu depuis Telegram."
+}
