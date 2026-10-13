@@ -1,1 +1,232 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jeu Concours</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    color: #fff;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    text-align: center;
+  }
+  h1 { font-size: 22px; margin-bottom: 10px; }
+  .info { font-size: 16px; opacity: 0.85; margin-bottom: 20px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    width: 100%;
+    max-width: 400px;
+    margin-bottom: 20px;
+  }
+  .case {
+    aspect-ratio: 1;
+    background: linear-gradient(145deg, #0f3460, #16537e);
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.15s, background 0.3s;
+  }
+  .case:active { transform: scale(0.95); }
+  .case.win { background: linear-gradient(145deg, #16a34a, #15803d); }
+  .case.lose { background: linear-gradient(145deg, #dc2626, #991b1b); }
+  .case:disabled { opacity: 0.6; cursor: not-allowed; }
+  .sticker {
+    font-size: 100px;
+    margin: 20px 0;
+    animation: pop 0.6s ease-out;
+  }
+  @keyframes pop {
+    0% { transform: scale(0); opacity: 0; }
+    60% { transform: scale(1.2); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .message {
+    font-size: 18px;
+    margin-top: 15px;
+    line-height: 1.5;
+    white-space: pre-line;
+  }
+  .hidden { display: none; }
+  .loading {
+    font-size: 20px;
+    opacity: 0.9;
+  }
+</style>
+</head>
+<body>
 
+<div id="loading" class="loading">⏳ Chargement...</div>
+
+<div id="game" class="hidden">
+  <h1 id="title">🎁 Trouvez une case gagnante !</h1>
+  <p class="info" id="info"></p>
+  <div class="grid" id="grid"></div>
+  <div id="sticker-container"></div>
+  <p class="message" id="message"></p>
+</div>
+
+<script>
+const tg = window.Telegram.WebApp;
+tg.ready();
+tg.expand();
+
+const params = new URLSearchParams(window.location.search);
+const langFromUrl = params.get("lang") || "fr";
+
+const initData = tg.initData;
+
+// Traductions côté client (fallback si serveur indisponible)
+const TEXTS = {
+  fr: {
+    title: "🎁 Trouvez une case gagnante !",
+    loading: "⏳ Chargement...",
+    error: "❌ Erreur"
+  },
+  en: {
+    title: "🎁 Find a winning box!",
+    loading: "⏳ Loading...",
+    error: "❌ Error"
+  },
+  ar: {
+    title: "🎁 اعثر على صندوق فائز!",
+    loading: "⏳ جار التحميل...",
+    error: "❌ خطأ"
+  },
+  pt: {
+    title: "🎁 Encontre uma caixa vencedora!",
+    loading: "⏳ Carregando...",
+    error: "❌ Erro"
+  },
+  es: {
+    title: "🎁 ¡Encuentra una casilla ganadora!",
+    loading: "⏳ Cargando...",
+    error: "❌ Error"
+  }
+};
+
+const txt = TEXTS[langFromUrl] || TEXTS.fr;
+document.getElementById("title").textContent = txt.title;
+document.getElementById("loading").textContent = txt.loading;
+
+async function startGame() {
+  try {
+    const res = await fetch("/api/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ initData })
+    });
+    const data = await res.json();
+
+    if (!data.ok) {
+      document.getElementById("loading").innerHTML =
+        txt.error + " : " + (data.message || "Erreur");
+      return;
+    }
+
+    document.getElementById("loading").classList.add("hidden");
+    document.getElementById("game").classList.remove("hidden");
+
+    if (data.choose_case) {
+      document.getElementById("info").textContent = data.choose_case;
+    }
+    if (data.tries_left_text) {
+      document.getElementById("info").textContent +=
+        " (" + data.tries_left_text + ")";
+    }
+
+    buildGrid();
+  } catch (e) {
+    console.error(e);
+    document.getElementById("loading").innerHTML = txt.error + " réseau";
+  }
+}
+
+function buildGrid() {
+  const grid = document.getElementById("grid");
+  grid.innerHTML = "";
+  for (let i = 0; i < 12; i++) {
+    const btn = document.createElement("button");
+    btn.className = "case";
+    btn.textContent = i + 1;
+    btn.onclick = () => playCase(i, btn);
+    grid.appendChild(btn);
+  }
+}
+
+async function playCase(index, btn) {
+  btn.disabled = true;
+
+  try {
+    const res = await fetch("/api/choose", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ initData, case: index })
+    });
+    const data = await res.json();
+
+    if (!data.ok) {
+      btn.disabled = false;
+      alert(data.message || "Erreur");
+      return;
+    }
+
+    if (data.resultat === "gagne") {
+      btn.classList.add("win");
+      showSticker("🎉");
+      document.getElementById("message").textContent = data.message;
+      disableAll();
+    } else if (data.resultat === "perdu") {
+      btn.classList.add("lose");
+      showSticker("😢");
+      document.getElementById("message").textContent = data.message;
+      disableAll();
+      revealWinning(data.winning || []);
+    } else {
+      btn.classList.add("lose");
+      showSticker("😢", 1200);
+      document.getElementById("message").textContent = data.message;
+    }
+  } catch (e) {
+    console.error(e);
+    btn.disabled = false;
+    alert("Erreur réseau");
+  }
+}
+
+function showSticker(emoji, timeout) {
+  const container = document.getElementById("sticker-container");
+  container.innerHTML = `<div class="sticker">${emoji}</div>`;
+  if (timeout) {
+    setTimeout(() => { container.innerHTML = ""; }, timeout);
+  }
+}
+
+function disableAll() {
+  document.querySelectorAll(".case").forEach(b => b.disabled = true);
+}
+
+function revealWinning(list) {
+  list.forEach(n => {
+    const btn = document.querySelectorAll(".case")[n - 1];
+    if (btn) btn.classList.add("win");
+  });
+}
+
+startGame();
+</script>
+</body>
+</html>
