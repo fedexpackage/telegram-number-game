@@ -1,0 +1,23 @@
+{
+  "welcome": "🎉 Welcome!\n\nYou are invited to play our game.\nFind a winning box among 12. You have 3 tries!",
+  "play_button": "🎮 Play",
+  "choose_case": "Choose a box:",
+  "tries_left": "You have {n} try(ies) left",
+  "case_lost": "❌ Box {n}: lost!",
+  "case_won": "🎉 Box {n}: WON!",
+  "game_lost": "😢 Too bad! You didn't find.\nWinning boxes were: {cases}",
+  "game_won": "🏆 CONGRATULATIONS!\n\nYou won!",
+  "claim_intro": "🏆 To claim your prize, we need to verify your participation.\n\nPlease enter your FULL NAME.",
+  "ask_tel": "Thank you.\n\nNow please enter your PHONE NUMBER.",
+  "ask_email": "Great.\n\nNow please enter your EMAIL ADDRESS.",
+  "invalid_nom": "❌ Invalid name. Use letters only.",
+  "invalid_tel": "❌ Invalid number. Example: +22997000000",
+  "invalid_email": "❌ Invalid email address.",
+  "already_claimed": "⚠️ This claim has already been registered.",
+  "not_eligible": "❌ Your participation does not match a validated win.",
+  "claim_success": "✅ Your request has been registered.\n\nWe will verify and award your prize.\n\nPlease wait.",
+  "cancelled": "❌ Claim cancelled.",
+  "already_played": "🚫 You have already played this game.\n\nOnly one participation allowed.",
+  "error_server": "❌ Server error. Please try again later.",
+  "unauthorized": "❌ Please open the game from Telegram."
+}
