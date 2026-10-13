@@ -251,19 +251,26 @@ def start_telegram_thread():
 
 
 # =========================================================
-# VÉRIFICATION TELEGRAM
+# VÉRIFICATION TELEGRAM (avec debug)
 # =========================================================
 def verify_telegram_data(init_data):
     if not init_data:
+        print("❌ VERIFY: init_data est vide")
         return False
     try:
         data = dict(parse_qsl(init_data, keep_blank_values=True))
         received_hash = data.pop("hash", None)
         if not received_hash:
+            print("❌ VERIFY: pas de hash dans init_data")
+            print(f"   init_data reçu: {init_data[:200]}")
             return False
 
         auth_date = int(data.get("auth_date", 0))
-        if time.time() - auth_date > 3600:
+        age = time.time() - auth_date
+        print(f"🔍 VERIFY: auth_date age = {age:.0f} secondes")
+
+        if age > 3600:
+            print(f"❌ VERIFY: init_data expiré ({age:.0f}s > 3600s)")
             return False
 
         data_check_string = "\n".join(
@@ -275,9 +282,17 @@ def verify_telegram_data(init_data):
         calculated = hmac.new(
             secret_key, data_check_string.encode(), hashlib.sha256
         ).hexdigest()
-        return hmac.compare_digest(calculated, received_hash)
+
+        print(f"🔍 VERIFY: hash reçu     = {received_hash[:30]}...")
+        print(f"🔍 VERIFY: hash calculé  = {calculated[:30]}...")
+        print(f"🔍 VERIFY: token utilisé = {BOT_TOKEN[:15]}...")
+        print(f"🔍 VERIFY: user_data     = {data.get('user', 'N/A')[:80]}")
+
+        result = hmac.compare_digest(calculated, received_hash)
+        print(f"🔍 VERIFY: résultat = {result}")
+        return result
     except Exception as e:
-        print("Erreur verify:", repr(e))
+        print("❌ VERIFY: erreur =", repr(e))
         return False
 
 
@@ -324,10 +339,12 @@ def api_register():
         body = request.get_json(silent=True) or {}
         init_data = body.get("initData", "")
 
+        print(f"📥 /api/register: initData length = {len(init_data) if init_data else 0}")
+
         if not init_data:
             return jsonify({"ok": False, "message": "initData manquant"}), 403
         if not verify_telegram_data(init_data):
-            return jsonify({"ok": False, "message": "Non autorisé"}), 403
+            return jsonify({"ok": False, "message": "Données Telegram invalides."}), 403
 
         telegram_id = get_telegram_user_id(init_data)
         lang = get_telegram_lang(init_data)
@@ -412,7 +429,7 @@ def api_start():
         if not init_data:
             return jsonify({"ok": False, "message": "initData manquant"}), 403
         if not verify_telegram_data(init_data):
-            return jsonify({"ok": False, "message": "Non autorisé"}), 403
+            return jsonify({"ok": False, "message": "Données Telegram invalides."}), 403
 
         telegram_id = get_telegram_user_id(init_data)
         lang = get_telegram_lang(init_data)
@@ -479,7 +496,7 @@ def api_choose():
         init_data = body.get("initData", "")
 
         if not verify_telegram_data(init_data):
-            return jsonify({"ok": False, "message": "Non autorisé"}), 403
+            return jsonify({"ok": False, "message": "Données Telegram invalides."}), 403
 
         telegram_id = get_telegram_user_id(init_data)
         lang = get_telegram_lang(init_data)
