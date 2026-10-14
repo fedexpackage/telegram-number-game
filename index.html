@@ -96,7 +96,7 @@
     <input id="input-nom" type="text" placeholder="..." autocomplete="name">
 
     <label id="label-tel" for="input-tel">Téléphone</label>
-    <input id="input-tel" type="tel" autocomplete="tel">
+    <input id="input-tel" type="tel" placeholder="Ex: +XXX XXXXXXXXX" autocomplete="tel">
 
     <label id="label-adresse" for="input-adresse">Adresse</label>
     <input id="input-adresse" type="text" autocomplete="street-address">
@@ -226,7 +226,7 @@ async function submitRegister() {
   errorDiv.textContent = "";
 
   if (!nom || nom.length < 2) { errorDiv.textContent = "Nom invalide."; return; }
-  if (!tel || tel.length < 8) { errorDiv.textContent = "Numero invalide."; return; }
+  if (!tel) { errorDiv.textContent = "Veuillez entrer un numéro."; return; }
   if (!adresse || adresse.length < 3) { errorDiv.textContent = "Adresse invalide."; return; }
   if (!email || !email.includes("@")) { errorDiv.textContent = "Email invalide."; return; }
 
