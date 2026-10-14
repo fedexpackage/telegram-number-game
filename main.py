@@ -1,4 +1,9 @@
 import os
+import sys
+
+# Forcer l'affichage immédiat des prints (pour voir les logs Render)
+sys.stdout.reconfigure(line_buffering=True)
+
 import json
 import hmac
 import hashlib
@@ -40,7 +45,6 @@ GAME_URL = os.environ.get("GAME_URL", "")
 
 # =========================================================
 # ADMINS AUTORISÉS À REJOUER À L'INFINI
-# Variable Render : ADMIN_IDS = "123456789,987654321"
 # =========================================================
 ADMIN_IDS_STR = os.environ.get("ADMIN_IDS", "")
 ADMIN_IDS = [x.strip() for x in ADMIN_IDS_STR.split(",") if x.strip()]
@@ -80,6 +84,7 @@ def notify_admin(message):
 # GOOGLE APPS SCRIPT
 # =========================================================
 def send_to_google(data):
+    print(f"📤 GOOGLE ENVOI: action={data.get('action')}")
     try:
         payload = json.dumps(data).encode("utf-8")
         req = urllib.request.Request(
@@ -90,10 +95,18 @@ def send_to_google(data):
         )
         with urllib.request.urlopen(req, timeout=20) as r:
             result = r.read().decode("utf-8")
-            print("Google:", result)
+            print(f"📥 GOOGLE RÉPONSE: {result}")
             return json.loads(result)
+    except urllib.error.HTTPError as e:
+        print(f"❌ GOOGLE HTTP ERROR: {e.code} - {e.reason}")
+        try:
+            err_body = e.read().decode("utf-8")
+            print(f"❌ GOOGLE ERREUR BODY: {err_body}")
+        except:
+            pass
+        return {"success": False}
     except Exception as e:
-        print("Erreur Google:", repr(e))
+        print(f"❌ GOOGLE EXCEPTION: {repr(e)}")
         return {"success": False}
 
 
@@ -109,14 +122,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     args = context.args or []
 
-    # ------- Réclamation -------
     if args and args[0].lower() == "claim":
         context.user_data.clear()
         context.user_data["lang"] = lang
         await update.message.reply_text(t("claim_intro", lang))
         return CLAIM_NOM
 
-    # ------- Jeu -------
     keyboard = [[
         InlineKeyboardButton(
             t("play_button", lang),
@@ -334,6 +345,8 @@ def api_register():
     if request.method == "OPTIONS":
         return jsonify({"ok": True})
 
+    print("📥 /api/register: DÉBUT")
+
     try:
         body = request.get_json(silent=True) or {}
         init_data = body.get("initData", "")
@@ -348,34 +361,26 @@ def api_register():
         telegram_id = get_telegram_user_id(init_data)
         lang = get_telegram_lang(init_data)
 
+        print(f"📥 /api/register: telegram_id={telegram_id}, lang={lang}")
+
         nom = str(body.get("nom_complet", "")).strip()
         tel = str(body.get("telephone", "")).strip()
         adresse = str(body.get("adresse", "")).strip()
         email = str(body.get("email", "")).strip()
 
         if not re.fullmatch(r"[A-Za-zÀ-ÿ' -]{2,80}", nom):
-            return jsonify({
-                "ok": False,
-                "message": t("register_error_nom", lang)
-            }), 400
+            return jsonify({"ok": False, "message": t("register_error_nom", lang)}), 400
 
         if not re.fullmatch(r"\+?\d[\d\s-]{7,20}", tel):
-            return jsonify({
-                "ok": False,
-                "message": t("register_error_tel", lang)
-            }), 400
+            return jsonify({"ok": False, "message": t("register_error_tel", lang)}), 400
 
         if len(adresse) < 3:
-            return jsonify({
-                "ok": False,
-                "message": t("register_error_adresse", lang)
-            }), 400
+            return jsonify({"ok": False, "message": t("register_error_adresse", lang)}), 400
 
         if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
-            return jsonify({
-                "ok": False,
-                "message": t("register_error_email", lang)
-            }), 400
+            return jsonify({"ok": False, "message": t("register_error_email", lang)}), 400
+
+        print(f"📥 /api/register: envoi à Google Sheets...")
 
         response = send_to_google({
             "action": "register",
@@ -387,6 +392,8 @@ def api_register():
             "lang": lang,
             "date": datetime.now(timezone.utc).isoformat()
         })
+
+        print(f"📥 /api/register: réponse Google = {response}")
 
         if response.get("alreadyRegistered"):
             return jsonify({
@@ -407,7 +414,9 @@ def api_register():
         }), 200
 
     except Exception as e:
-        print("ERREUR /api/register:", repr(e))
+        print(f"❌ ERREUR /api/register: {repr(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"ok": False, "message": "Erreur serveur"}), 500
 
 
@@ -533,8 +542,6 @@ def api_choose():
                     f"Case : {case + 1}\n"
                     f"Langue : {lang}"
                 )
-            else:
-                print(f"[ADMIN TEST] Gagné - ID: {telegram_id}")
 
             del GAMES[telegram_id]
             return jsonify({
@@ -553,8 +560,6 @@ def api_choose():
                     "lang": lang,
                     "date": datetime.now(timezone.utc).isoformat()
                 })
-            else:
-                print(f"[ADMIN TEST] Perdu - ID: {telegram_id}")
 
             winning_1based = [c + 1 for c in partie["winning"]]
             del GAMES[telegram_id]
@@ -595,7 +600,10 @@ def health():
 # LANCEMENT
 # =========================================================
 if __name__ == "__main__":
-    print("Flask démarré.")
+    print("=" * 60)
+    print("FLASK DÉMARRÉ")
     print(f"Admins autorisés : {ADMIN_IDS}")
+    print(f"Google Script URL : {GOOGLE_SCRIPT_URL[:50]}...")
+    print("=" * 60)
     threading.Thread(target=start_telegram_thread, daemon=True).start()
     app.run(host="0.0.0.0", port=PORT, debug=False)
