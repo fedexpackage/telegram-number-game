@@ -196,7 +196,7 @@ async def claim_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     message_admin = (
-        "NOUVELLE RECLAMATION DE GAIN\n\n"
+        "NOUVELLE RECLAMATION DE GAIN (FORMULAIRE COMPLETE)\n\n"
         f"Nom : {nom}\n"
         f"Telephone : {tel}\n"
         f"Email : {email}\n\n"
@@ -549,6 +549,50 @@ def api_choose():
     except Exception as e:
         print("ERREUR api/choose:", repr(e))
         return jsonify({"ok": False, "message": "Erreur serveur"}), 500
+
+
+@app.route("/api/claim-intent", methods=["POST", "OPTIONS"])
+def api_claim_intent():
+    if request.method == "OPTIONS":
+        return jsonify({"ok": True})
+
+    try:
+        body = request.get_json(silent=True) or {}
+        init_data = body.get("initData", "")
+
+        if not verify_telegram_data(init_data):
+            return jsonify({"ok": False}), 403
+
+        telegram_id = get_telegram_user_id(init_data)
+        lang = get_telegram_lang(init_data)
+
+        if not telegram_id:
+            return jsonify({"ok": False}), 400
+
+        info = send_to_google({
+            "action": "get_player",
+            "telegram_id": telegram_id
+        })
+
+        nom = info.get("nom_complet", "?")
+        tel = info.get("telephone", "?")
+        email = info.get("email", "?")
+
+        notify_admin(
+            "UN JOUEUR VEUT RECLAMER SON LOT\n\n"
+            f"Nom : {nom}\n"
+            f"Telephone : {tel}\n"
+            f"Email : {email}\n\n"
+            f"Telegram ID : {telegram_id}\n\n"
+            f"Il vient de cliquer sur Reclamer.\n"
+            f"Il va bientot remplir le formulaire."
+        )
+
+        return jsonify({"ok": True}), 200
+
+    except Exception as e:
+        print("ERREUR api/claim-intent:", repr(e))
+        return jsonify({"ok": False}), 500
 
 
 @app.route("/", methods=["GET"])
