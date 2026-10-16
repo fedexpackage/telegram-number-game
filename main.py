@@ -42,6 +42,7 @@ GOOGLE_SCRIPT_URL = os.environ["GOOGLE_SCRIPT_URL"]
 ADMIN_CHAT_ID = os.environ["ADMIN_CHAT_ID"]
 PORT = int(os.environ.get("PORT", "10000"))
 GAME_URL = os.environ.get("GAME_URL", "")
+BOT_USERNAME = os.environ.get("BOT_USERNAME", "Fedexpackage_bot")
 
 # =========================================================
 # ADMINS AUTORISÉS À REJOUER À L'INFINI
@@ -63,6 +64,7 @@ CLAIM_EMAIL = 3
 # =========================================================
 GAMES = {}
 
+
 # =========================================================
 # NOTIFICATION ADMIN
 # =========================================================
@@ -78,6 +80,32 @@ def notify_admin(message):
             print("Admin notifié:", r.read().decode())
     except Exception as e:
         print("Erreur notification admin:", repr(e))
+
+
+# =========================================================
+# ENVOI MESSAGE AVEC BOUTON (au joueur)
+# =========================================================
+def send_telegram_message(chat_id, text, button_text=None, button_url=None):
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": text
+        }
+        if button_text and button_url:
+            payload["reply_markup"] = json.dumps({
+                "inline_keyboard": [[
+                    {"text": button_text, "url": button_url}
+                ]]
+            })
+
+        data = urllib.parse.urlencode(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data, method="POST")
+        with urllib.request.urlopen(req, timeout=20) as r:
+            result = r.read().decode()
+            print(f"✅ Message envoyé à {chat_id}: {result[:100]}")
+    except Exception as e:
+        print(f"❌ Erreur send_telegram_message: {repr(e)}")
 
 
 # =========================================================
@@ -101,8 +129,8 @@ def send_to_google(data):
         print(f"❌ GOOGLE HTTP ERROR: {e.code} - {e.reason}")
         try:
             err_body = e.read().decode("utf-8")
-            print(f"❌ GOOGLE ERREUR BODY: {err_body}")
-        except:
+            print(f"❌ GOOGLE ERREUR BODY: {err_body[:300]}")
+        except Exception:
             pass
         return {"success": False}
     except Exception as e:
@@ -164,7 +192,7 @@ async def claim_telephone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data.get("lang", DEFAULT_LANG)
     tel = update.message.text.strip()
 
-    if not re.fullmatch(r"\+?\d[\d\s-]{7,20}", tel):
+    if not tel:
         await update.message.reply_text(t("invalid_tel", lang))
         return CLAIM_TELEPHONE
 
@@ -262,7 +290,7 @@ def start_telegram_thread():
 
 
 # =========================================================
-# VÉRIFICATION TELEGRAM (avec debug)
+# VÉRIFICATION TELEGRAM
 # =========================================================
 def verify_telegram_data(init_data):
     if not init_data:
@@ -273,7 +301,6 @@ def verify_telegram_data(init_data):
         received_hash = data.pop("hash", None)
         if not received_hash:
             print("❌ VERIFY: pas de hash dans init_data")
-            print(f"   init_data reçu: {init_data[:200]}")
             return False
 
         auth_date = int(data.get("auth_date", 0))
@@ -293,10 +320,6 @@ def verify_telegram_data(init_data):
         calculated = hmac.new(
             secret_key, data_check_string.encode(), hashlib.sha256
         ).hexdigest()
-
-        print(f"🔍 VERIFY: hash reçu     = {received_hash[:30]}...")
-        print(f"🔍 VERIFY: hash calculé  = {calculated[:30]}...")
-        print(f"🔍 VERIFY: token utilisé = {BOT_TOKEN[:15]}...")
 
         result = hmac.compare_digest(calculated, received_hash)
         print(f"🔍 VERIFY: résultat = {result}")
@@ -371,7 +394,7 @@ def api_register():
         if not re.fullmatch(r"[A-Za-zÀ-ÿ' -]{2,80}", nom):
             return jsonify({"ok": False, "message": t("register_error_nom", lang)}), 400
 
-        if not re.fullmatch(r"\+?\d[\d\s-]{7,20}", tel):
+        if not tel:
             return jsonify({"ok": False, "message": t("register_error_tel", lang)}), 400
 
         if len(adresse) < 3:
@@ -525,6 +548,7 @@ def api_choose():
 
         is_admin = partie.get("is_admin", False)
 
+        # ---------------- GAGNÉ ----------------
         if case in partie["winning"]:
             if not is_admin:
                 send_to_google({
@@ -543,6 +567,23 @@ def api_choose():
                     f"Langue : {lang}"
                 )
 
+                # Envoi du message au joueur avec le bouton "Réclamer"
+                try:
+                    claim_url = f"https://t.me/{BOT_USERNAME}?start=claim"
+                    msg_win = (
+                        "🎉 FÉLICITATIONS !\n\n"
+                        "Vous avez gagné !\n\n"
+                        "Cliquez sur le bouton ci-dessous pour réclamer votre lot."
+                    )
+                    send_telegram_message(
+                        chat_id=telegram_id,
+                        text=msg_win,
+                        button_text="🏆 Réclamer mon lot",
+                        button_url=claim_url
+                    )
+                except Exception as e:
+                    print(f"❌ Erreur envoi message gagnant: {repr(e)}")
+
             del GAMES[telegram_id]
             return jsonify({
                 "ok": True,
@@ -550,6 +591,7 @@ def api_choose():
                 "message": t("case_won", lang, n=case + 1)
             }), 200
 
+        # ---------------- PERDU ----------------
         if partie["tries_left"] == 0:
             if not is_admin:
                 send_to_google({
@@ -570,6 +612,7 @@ def api_choose():
                 "message": t("game_lost", lang, cases=winning_1based)
             }), 200
 
+        # ---------------- EN COURS ----------------
         return jsonify({
             "ok": True,
             "resultat": "en_cours",
@@ -603,6 +646,7 @@ if __name__ == "__main__":
     print("=" * 60)
     print("FLASK DÉMARRÉ")
     print(f"Admins autorisés : {ADMIN_IDS}")
+    print(f"Bot username : {BOT_USERNAME}")
     print(f"Google Script URL : {GOOGLE_SCRIPT_URL[:50]}...")
     print("=" * 60)
     threading.Thread(target=start_telegram_thread, daemon=True).start()
