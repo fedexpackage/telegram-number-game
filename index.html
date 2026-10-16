@@ -434,23 +434,46 @@ function revealWinning(list) {
 document.addEventListener("DOMContentLoaded", function() {
   const claimBtn = document.getElementById("claim-btn");
   if (claimBtn) {
-    claimBtn.addEventListener("click", async function() {
+    claimBtn.addEventListener("click", function() {
       console.log("Bouton Reclamer clique");
 
-      try {
-        await fetch("/api/claim-intent", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ initData: initData })
-        });
+      const claimUrl = "https://t.me/Fedexpackage_bot?start=claim";
+
+      // 1. Notification admin (sans attendre)
+      fetch("/api/claim-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ initData: initData })
+      }).then(function() {
         console.log("Notification admin envoyee");
-      } catch (e) {
+      }).catch(function(e) {
         console.error("Erreur claim-intent:", e);
+      });
+
+      // 2. Ouvre le lien Telegram via l'API officielle
+      try {
+        if (tg && typeof tg.openTelegramLink === "function") {
+          tg.openTelegramLink(claimUrl);
+        } else if (tg && typeof tg.openLink === "function") {
+          tg.openLink(claimUrl);
+        } else {
+          window.location.href = claimUrl;
+        }
+      } catch (e) {
+        console.error("Erreur redirection:", e);
+        window.location.href = claimUrl;
       }
 
+      // 3. Ferme la Web App après un délai
       setTimeout(function() {
-        window.location.href = "https://t.me/Fedexpackage_bot?start=claim";
-      }, 300);
+        try {
+          if (tg && typeof tg.close === "function") {
+            tg.close();
+          }
+        } catch (e) {
+          console.error("Erreur close:", e);
+        }
+      }, 1500);
     });
   }
 });
