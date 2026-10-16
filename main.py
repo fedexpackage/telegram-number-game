@@ -1,653 +1,446 @@
-import os
-import sys
-
-# Forcer l'affichage immédiat des prints (pour voir les logs Render)
-sys.stdout.reconfigure(line_buffering=True)
-
-import json
-import hmac
-import hashlib
-import threading
-import asyncio
-import secrets
-import re
-import time
-import urllib.request
-import urllib.parse
-from datetime import datetime, timezone
-from urllib.parse import parse_qsl
-from flask import Flask, request, jsonify, send_file
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    WebAppInfo
-)
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    ContextTypes,
-    ConversationHandler,
-    MessageHandler,
-    filters
-)
-
-from i18n import t, get_user_lang, DEFAULT_LANG
-
-# =========================================================
-# CONFIGURATION
-# =========================================================
-BOT_TOKEN = os.environ["BOT_TOKEN"]
-GOOGLE_SCRIPT_URL = os.environ["GOOGLE_SCRIPT_URL"]
-ADMIN_CHAT_ID = os.environ["ADMIN_CHAT_ID"]
-PORT = int(os.environ.get("PORT", "10000"))
-GAME_URL = os.environ.get("GAME_URL", "")
-BOT_USERNAME = os.environ.get("BOT_USERNAME", "Fedexpackage_bot")
-
-# =========================================================
-# ADMINS AUTORISÉS À REJOUER À L'INFINI
-# =========================================================
-ADMIN_IDS_STR = os.environ.get("ADMIN_IDS", "")
-ADMIN_IDS = [x.strip() for x in ADMIN_IDS_STR.split(",") if x.strip()]
-
-app = Flask(__name__)
-
-# =========================================================
-# ÉTATS CONVERSATION
-# =========================================================
-CLAIM_NOM = 1
-CLAIM_TELEPHONE = 2
-CLAIM_EMAIL = 3
-
-# =========================================================
-# PARTIES EN COURS
-# =========================================================
-GAMES = {}
-
-
-# =========================================================
-# NOTIFICATION ADMIN
-# =========================================================
-def notify_admin(message):
-    try:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        data = urllib.parse.urlencode({
-            "chat_id": ADMIN_CHAT_ID,
-            "text": message
-        }).encode("utf-8")
-        req = urllib.request.Request(url, data=data, method="POST")
-        with urllib.request.urlopen(req, timeout=20) as r:
-            print("Admin notifié:", r.read().decode())
-    except Exception as e:
-        print("Erreur notification admin:", repr(e))
-
-
-# =========================================================
-# ENVOI MESSAGE AVEC BOUTON (au joueur)
-# =========================================================
-def send_telegram_message(chat_id, text, button_text=None, button_url=None):
-    try:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        payload = {
-            "chat_id": chat_id,
-            "text": text
-        }
-        if button_text and button_url:
-            payload["reply_markup"] = json.dumps({
-                "inline_keyboard": [[
-                    {"text": button_text, "url": button_url}
-                ]]
-            })
-
-        data = urllib.parse.urlencode(payload).encode("utf-8")
-        req = urllib.request.Request(url, data=data, method="POST")
-        with urllib.request.urlopen(req, timeout=20) as r:
-            result = r.read().decode()
-            print(f"✅ Message envoyé à {chat_id}: {result[:100]}")
-    except Exception as e:
-        print(f"❌ Erreur send_telegram_message: {repr(e)}")
-
-
-# =========================================================
-# GOOGLE APPS SCRIPT
-# =========================================================
-def send_to_google(data):
-    print(f"📤 GOOGLE ENVOI: action={data.get('action')}")
-    try:
-        payload = json.dumps(data).encode("utf-8")
-        req = urllib.request.Request(
-            GOOGLE_SCRIPT_URL,
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST"
-        )
-        with urllib.request.urlopen(req, timeout=20) as r:
-            result = r.read().decode("utf-8")
-            print(f"📥 GOOGLE RÉPONSE: {result}")
-            return json.loads(result)
-    except urllib.error.HTTPError as e:
-        print(f"❌ GOOGLE HTTP ERROR: {e.code} - {e.reason}")
-        try:
-            err_body = e.read().decode("utf-8")
-            print(f"❌ GOOGLE ERREUR BODY: {err_body[:300]}")
-        except Exception:
-            pass
-        return {"success": False}
-    except Exception as e:
-        print(f"❌ GOOGLE EXCEPTION: {repr(e)}")
-        return {"success": False}
-
-
-# =========================================================
-# /START
-# =========================================================
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message:
-        return ConversationHandler.END
-
-    lang = get_user_lang(update)
-    context.user_data["lang"] = lang
-
-    args = context.args or []
-
-    if args and args[0].lower() == "claim":
-        context.user_data.clear()
-        context.user_data["lang"] = lang
-        await update.message.reply_text(t("claim_intro", lang))
-        return CLAIM_NOM
-
-    keyboard = [[
-        InlineKeyboardButton(
-            t("play_button", lang),
-            web_app=WebAppInfo(url=f"{GAME_URL}?lang={lang}")
-        )
-    ]]
-    await update.message.reply_text(
-        t("welcome", lang),
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-    return ConversationHandler.END
-
-
-# =========================================================
-# RÉCLAMATION — NOM COMPLET
-# =========================================================
-async def claim_nom(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data.get("lang", DEFAULT_LANG)
-    nom = update.message.text.strip()
-
-    if not re.fullmatch(r"[A-Za-zÀ-ÿ' -]{2,80}", nom):
-        await update.message.reply_text(t("invalid_nom", lang))
-        return CLAIM_NOM
-
-    context.user_data["claim_nom"] = nom
-    await update.message.reply_text(t("ask_tel", lang))
-    return CLAIM_TELEPHONE
-
-
-# =========================================================
-# RÉCLAMATION — TÉLÉPHONE
-# =========================================================
-async def claim_telephone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data.get("lang", DEFAULT_LANG)
-    tel = update.message.text.strip()
-
-    if not tel:
-        await update.message.reply_text(t("invalid_tel", lang))
-        return CLAIM_TELEPHONE
-
-    context.user_data["claim_tel"] = tel
-    await update.message.reply_text(t("ask_email", lang))
-    return CLAIM_EMAIL
-
-
-# =========================================================
-# RÉCLAMATION — EMAIL
-# =========================================================
-async def claim_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data.get("lang", DEFAULT_LANG)
-    email = update.message.text.strip()
-
-    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
-        await update.message.reply_text(t("invalid_email", lang))
-        return CLAIM_EMAIL
-
-    nom = context.user_data.get("claim_nom", "")
-    tel = context.user_data.get("claim_tel", "")
-    telegram_id = str(update.effective_user.id)
-
-    response = send_to_google({
-        "action": "claim",
-        "telegram_id": telegram_id,
-        "nom_complet": nom,
-        "telephone": tel,
-        "email": email
-    })
-
-    if response.get("alreadyClaimed"):
-        await update.message.reply_text(t("already_claimed", lang))
-        context.user_data.clear()
-        return ConversationHandler.END
-
-    if not response.get("eligible"):
-        await update.message.reply_text(t("not_eligible", lang))
-        context.user_data.clear()
-        return ConversationHandler.END
-
-    message_admin = (
-        "🏆 NOUVELLE RÉCLAMATION DE GAIN\n\n"
-        f"Nom : {nom}\n"
-        f"Téléphone : {tel}\n"
-        f"Email : {email}\n\n"
-        f"Telegram ID : {telegram_id}\n\n"
-        f"Résultat Google Sheets : {response.get('resultat', '')}"
-    )
-    notify_admin(message_admin)
-
-    await update.message.reply_text(t("claim_success", lang))
-    context.user_data.clear()
-    return ConversationHandler.END
-
-
-# =========================================================
-# ANNULATION
-# =========================================================
-async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data.get("lang", DEFAULT_LANG)
-    context.user_data.clear()
-    if update.message:
-        await update.message.reply_text(t("cancelled", lang))
-    return ConversationHandler.END
-
-
-# =========================================================
-# LANCEMENT BOT TELEGRAM
-# =========================================================
-async def run_telegram_bot():
-    telegram_app = Application.builder().token(BOT_TOKEN).build()
-
-    claim_conversation = ConversationHandler(
-        entry_points=[CommandHandler("start", start_command)],
-        states={
-            CLAIM_NOM: [MessageHandler(filters.TEXT & ~filters.COMMAND, claim_nom)],
-            CLAIM_TELEPHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, claim_telephone)],
-            CLAIM_EMAIL: [MessageHandler(filters.TEXT & ~filters.COMMAND, claim_email)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel_command)],
-        conversation_timeout=600
-    )
-
-    telegram_app.add_handler(claim_conversation)
-    print("Bot Telegram démarré.")
-    await telegram_app.initialize()
-    await telegram_app.start()
-    await telegram_app.updater.start_polling()
-    await asyncio.Event().wait()
-
-
-def start_telegram_thread():
-    asyncio.run(run_telegram_bot())
-
-
-# =========================================================
-# VÉRIFICATION TELEGRAM
-# =========================================================
-def verify_telegram_data(init_data):
-    if not init_data:
-        print("❌ VERIFY: init_data est vide")
-        return False
-    try:
-        data = dict(parse_qsl(init_data, keep_blank_values=True))
-        received_hash = data.pop("hash", None)
-        if not received_hash:
-            print("❌ VERIFY: pas de hash dans init_data")
-            return False
-
-        auth_date = int(data.get("auth_date", 0))
-        age = time.time() - auth_date
-        print(f"🔍 VERIFY: auth_date age = {age:.0f} secondes")
-
-        if age > 3600:
-            print(f"❌ VERIFY: init_data expiré ({age:.0f}s > 3600s)")
-            return False
-
-        data_check_string = "\n".join(
-            f"{k}={data[k]}" for k in sorted(data)
-        )
-        secret_key = hmac.new(
-            b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256
-        ).digest()
-        calculated = hmac.new(
-            secret_key, data_check_string.encode(), hashlib.sha256
-        ).hexdigest()
-
-        result = hmac.compare_digest(calculated, received_hash)
-        print(f"🔍 VERIFY: résultat = {result}")
-        return result
-    except Exception as e:
-        print("❌ VERIFY: erreur =", repr(e))
-        return False
-
-
-def get_telegram_user_id(init_data):
-    try:
-        data = dict(parse_qsl(init_data, keep_blank_values=True))
-        user = json.loads(data.get("user", "{}"))
-        uid = user.get("id")
-        return str(uid) if uid else None
-    except Exception:
-        return None
-
-
-def get_telegram_lang(init_data):
-    try:
-        data = dict(parse_qsl(init_data, keep_blank_values=True))
-        user = json.loads(data.get("user", "{}"))
-        code = (user.get("language_code") or "en")[:2]
-        return code if code in ("fr", "en", "ar", "pt", "es") else "en"
-    except Exception:
-        return "en"
-
-
-# =========================================================
-# CORS
-# =========================================================
-@app.after_request
-def add_cors(response):
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    return response
-
-
-# =========================================================
-# API : INSCRIPTION DU JOUEUR
-# =========================================================
-@app.route("/api/register", methods=["POST", "OPTIONS"])
-def api_register():
-    if request.method == "OPTIONS":
-        return jsonify({"ok": True})
-
-    print("📥 /api/register: DÉBUT")
-
-    try:
-        body = request.get_json(silent=True) or {}
-        init_data = body.get("initData", "")
-
-        print(f"📥 /api/register: initData length = {len(init_data) if init_data else 0}")
-
-        if not init_data:
-            return jsonify({"ok": False, "message": "initData manquant"}), 403
-        if not verify_telegram_data(init_data):
-            return jsonify({"ok": False, "message": "Données Telegram invalides."}), 403
-
-        telegram_id = get_telegram_user_id(init_data)
-        lang = get_telegram_lang(init_data)
-
-        print(f"📥 /api/register: telegram_id={telegram_id}, lang={lang}")
-
-        nom = str(body.get("nom_complet", "")).strip()
-        tel = str(body.get("telephone", "")).strip()
-        adresse = str(body.get("adresse", "")).strip()
-        email = str(body.get("email", "")).strip()
-
-        if not re.fullmatch(r"[A-Za-zÀ-ÿ' -]{2,80}", nom):
-            return jsonify({"ok": False, "message": t("register_error_nom", lang)}), 400
-
-        if not tel:
-            return jsonify({"ok": False, "message": t("register_error_tel", lang)}), 400
-
-        if len(adresse) < 3:
-            return jsonify({"ok": False, "message": t("register_error_adresse", lang)}), 400
-
-        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
-            return jsonify({"ok": False, "message": t("register_error_email", lang)}), 400
-
-        print(f"📥 /api/register: envoi à Google Sheets...")
-
-        response = send_to_google({
-            "action": "register",
-            "telegram_id": telegram_id,
-            "nom_complet": nom,
-            "telephone": tel,
-            "adresse": adresse,
-            "email": email,
-            "lang": lang,
-            "date": datetime.now(timezone.utc).isoformat()
-        })
-
-        print(f"📥 /api/register: réponse Google = {response}")
-
-        if response.get("alreadyRegistered"):
-            return jsonify({
-                "ok": False,
-                "alreadyRegistered": True,
-                "message": t("register_already", lang)
-            }), 409
-
-        if not response.get("success"):
-            return jsonify({
-                "ok": False,
-                "message": t("error_server", lang)
-            }), 502
-
-        return jsonify({
-            "ok": True,
-            "message": t("register_success", lang)
-        }), 200
-
-    except Exception as e:
-        print(f"❌ ERREUR /api/register: {repr(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"ok": False, "message": "Erreur serveur"}), 500
-
-
-# =========================================================
-# API : DÉMARRER UNE PARTIE
-# =========================================================
-@app.route("/api/start", methods=["POST", "OPTIONS"])
-def api_start():
-    if request.method == "OPTIONS":
-        return jsonify({"ok": True})
-
-    try:
-        body = request.get_json(silent=True) or {}
-        init_data = body.get("initData", "")
-
-        if not init_data:
-            return jsonify({"ok": False, "message": "initData manquant"}), 403
-        if not verify_telegram_data(init_data):
-            return jsonify({"ok": False, "message": "Données Telegram invalides."}), 403
-
-        telegram_id = get_telegram_user_id(init_data)
-        lang = get_telegram_lang(init_data)
-
-        is_admin = telegram_id in ADMIN_IDS
-
-        if not is_admin:
-            check = send_to_google({
-                "action": "check",
-                "telegram_id": telegram_id
-            })
-
-            if not check.get("registered"):
-                return jsonify({
-                    "ok": False,
-                    "notRegistered": True,
-                    "message": "Vous devez d'abord vous inscrire."
-                }), 403
-
-            if check.get("alreadyPlayed"):
-                return jsonify({
-                    "ok": False,
-                    "message": t("already_played", lang)
-                }), 409
-
-        winning = secrets.SystemRandom().sample(range(12), 4)
-
-        GAMES[telegram_id] = {
-            "winning": winning,
-            "tries_left": 3,
-            "played": [],
-            "is_admin": is_admin,
-            "date": datetime.now(timezone.utc).isoformat()
-        }
-
-        return jsonify({
-            "ok": True,
-            "nb_cases": 12,
-            "tries_left": 3,
-            "lang": lang,
-            "is_admin": is_admin,
-            "choose_case": t("choose_case", lang),
-            "tries_left_text": t("tries_left", lang, n=3)
-        }), 200
-
-    except Exception as e:
-        print("ERREUR /api/start:", repr(e))
-        return jsonify({"ok": False, "message": "Erreur serveur"}), 500
-
-
-# =========================================================
-# API : JOUER UNE CASE
-# =========================================================
-@app.route("/api/choose", methods=["POST", "OPTIONS"])
-def api_choose():
-    if request.method == "OPTIONS":
-        return jsonify({"ok": True})
-
-    try:
-        body = request.get_json(silent=True) or {}
-        init_data = body.get("initData", "")
-
-        if not verify_telegram_data(init_data):
-            return jsonify({"ok": False, "message": "Données Telegram invalides."}), 403
-
-        telegram_id = get_telegram_user_id(init_data)
-        lang = get_telegram_lang(init_data)
-        partie = GAMES.get(telegram_id)
-
-        if not partie:
-            return jsonify({"ok": False, "message": "Aucune partie"}), 400
-
-        if partie["tries_left"] <= 0:
-            return jsonify({"ok": False, "message": "Plus d'essais"}), 400
-
-        try:
-            case = int(body.get("case"))
-            if not (0 <= case <= 11):
-                raise ValueError
-            if case in partie["played"]:
-                return jsonify({"ok": False, "message": "Case déjà jouée"}), 400
-        except (TypeError, ValueError):
-            return jsonify({"ok": False, "message": "Case invalide"}), 400
-
-        partie["played"].append(case)
-        partie["tries_left"] -= 1
-
-        is_admin = partie.get("is_admin", False)
-
-        # ---------------- GAGNÉ ----------------
-        if case in partie["winning"]:
-            if not is_admin:
-                send_to_google({
-                    "action": "result",
-                    "telegram_id": telegram_id,
-                    "resultat": "gagne",
-                    "case_choisie": case,
-                    "tentatives": partie["played"],
-                    "lang": lang,
-                    "date": datetime.now(timezone.utc).isoformat()
-                })
-                notify_admin(
-                    f"🎉 NOUVEAU GAGNANT\n"
-                    f"Telegram ID : {telegram_id}\n"
-                    f"Case : {case + 1}\n"
-                    f"Langue : {lang}"
-                )
-
-                # Envoi du message au joueur avec le bouton "Réclamer"
-                try:
-                    claim_url = f"https://t.me/{BOT_USERNAME}?start=claim"
-                    msg_win = (
-                        "🎉 FÉLICITATIONS !\n\n"
-                        "Vous avez gagné !\n\n"
-                        "Cliquez sur le bouton ci-dessous pour réclamer votre lot."
-                    )
-                    send_telegram_message(
-                        chat_id=telegram_id,
-                        text=msg_win,
-                        button_text="🏆 Réclamer mon lot",
-                        button_url=claim_url
-                    )
-                except Exception as e:
-                    print(f"❌ Erreur envoi message gagnant: {repr(e)}")
-
-            del GAMES[telegram_id]
-            return jsonify({
-                "ok": True,
-                "resultat": "gagne",
-                "message": t("case_won", lang, n=case + 1)
-            }), 200
-
-        # ---------------- PERDU ----------------
-        if partie["tries_left"] == 0:
-            if not is_admin:
-                send_to_google({
-                    "action": "result",
-                    "telegram_id": telegram_id,
-                    "resultat": "perdu",
-                    "tentatives": partie["played"],
-                    "lang": lang,
-                    "date": datetime.now(timezone.utc).isoformat()
-                })
-
-            winning_1based = [c + 1 for c in partie["winning"]]
-            del GAMES[telegram_id]
-            return jsonify({
-                "ok": True,
-                "resultat": "perdu",
-                "winning": winning_1based,
-                "message": t("game_lost", lang, cases=winning_1based)
-            }), 200
-
-        # ---------------- EN COURS ----------------
-        return jsonify({
-            "ok": True,
-            "resultat": "en_cours",
-            "tries_left": partie["tries_left"],
-            "message": t("case_lost", lang, n=case + 1) + " " +
-                       t("tries_left", lang, n=partie["tries_left"])
-        }), 200
-
-    except Exception as e:
-        print("ERREUR /api/choose:", repr(e))
-        return jsonify({"ok": False, "message": "Erreur serveur"}), 500
-
-
-# =========================================================
-# PAGE JEU
-# =========================================================
-@app.route("/", methods=["GET"])
-def home():
-    return send_file("index.html")
-
-
-@app.route("/health", methods=["GET"])
-def health():
-    return jsonify({"ok": True})
-
-
-# =========================================================
-# LANCEMENT
-# =========================================================
-if __name__ == "__main__":
-    print("=" * 60)
-    print("FLASK DÉMARRÉ")
-    print(f"Admins autorisés : {ADMIN_IDS}")
-    print(f"Bot username : {BOT_USERNAME}")
-    print(f"Google Script URL : {GOOGLE_SCRIPT_URL[:50]}...")
-    print("=" * 60)
-    threading.Thread(target=start_telegram_thread, daemon=True).start()
-    app.run(host="0.0.0.0", port=PORT, debug=False)
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jeu Concours</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    color: #fff;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    text-align: center;
+  }
+  h1 { font-size: 22px; margin-bottom: 10px; }
+  .info { font-size: 16px; opacity: 0.85; margin-bottom: 20px; }
+  .subtitle { font-size: 15px; opacity: 0.75; margin-bottom: 20px; line-height: 1.4; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    width: 100%;
+    max-width: 400px;
+    margin-bottom: 20px;
+  }
+  .case {
+    aspect-ratio: 1;
+    background: linear-gradient(145deg, #0f3460, #16537e);
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.15s, background 0.3s;
+  }
+  .case:active { transform: scale(0.95); }
+  .case.win { background: linear-gradient(145deg, #16a34a, #15803d); }
+  .case.lose { background: linear-gradient(145deg, #dc2626, #991b1b); }
+  .case:disabled { opacity: 0.6; cursor: not-allowed; }
+  .sticker { font-size: 100px; margin: 20px 0; animation: pop 0.6s ease-out; }
+  @keyframes pop {
+    0% { transform: scale(0); opacity: 0; }
+    60% { transform: scale(1.2); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .message { font-size: 18px; margin-top: 15px; line-height: 1.5; white-space: pre-line; }
+  .hidden { display: none !important; }
+  .loading { font-size: 20px; opacity: 0.9; }
+  .form { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 12px; margin-top: 20px; }
+  .form label { font-size: 14px; text-align: left; opacity: 0.85; }
+  .form input {
+    padding: 14px;
+    border-radius: 10px;
+    border: 1px solid #0f3460;
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+    font-size: 16px;
+    outline: none;
+  }
+  .form input:focus { border-color: #16537e; }
+  .form input::placeholder { color: rgba(255, 255, 255, 0.35); }
+  .form button {
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    background: linear-gradient(145deg, #16a34a, #15803d);
+    color: #fff;
+    font-size: 17px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 10px;
+  }
+  .form button:active { transform: scale(0.97); }
+  .form button:disabled { opacity: 0.6; cursor: not-allowed; }
+  .error { color: #f87171; font-size: 14px; margin-top: 8px; }
+
+  /* Bouton Réclamer - caché par défaut */
+  .claim-btn {
+    display: block;
+    width: 100%;
+    max-width: 400px;
+    padding: 18px;
+    margin-top: 20px;
+    border-radius: 12px;
+    border: none;
+    background: linear-gradient(145deg, #f59e0b, #d97706);
+    color: #fff;
+    font-size: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
+    animation: pulse 1.5s infinite;
+    text-decoration: none;
+    text-align: center;
+  }
+  .claim-btn:active { transform: scale(0.97); }
+  @keyframes pulse {
+    0% { box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4); }
+    50% { box-shadow: 0 6px 30px rgba(245, 158, 11, 0.8); }
+    100% { box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4); }
+  }
+  .claim-hint {
+    font-size: 14px;
+    opacity: 0.7;
+    margin-top: 10px;
+    margin-bottom: 20px;
+  }
+</style>
+</head>
+<body>
+
+<div id="loading" class="loading">⏳ Chargement...</div>
+
+<div id="register-section" class="hidden">
+  <h1 id="register-title">📝 Inscription</h1>
+  <p class="subtitle" id="register-subtitle">Remplissez vos informations pour commencer.</p>
+
+  <div class="form">
+    <label id="label-nom" for="input-nom">Nom complet</label>
+    <input id="input-nom" type="text" placeholder="..." autocomplete="name">
+
+    <label id="label-tel" for="input-tel">Téléphone</label>
+    <input id="input-tel" type="tel" placeholder="Ex: +XXX XXXXXXXXX" autocomplete="tel">
+
+    <label id="label-adresse" for="input-adresse">Adresse</label>
+    <input id="input-adresse" type="text" autocomplete="street-address">
+
+    <label id="label-email" for="input-email">Email</label>
+    <input id="input-email" type="email" placeholder="exemple@email.com" autocomplete="email">
+
+    <button id="register-btn" type="button">Commencer le jeu</button>
+    <div id="register-error" class="error"></div>
+  </div>
+</div>
+
+<div id="game" class="hidden">
+  <h1 id="title">🎁 Trouvez une case gagnante !</h1>
+  <p class="info" id="info"></p>
+  <div class="grid" id="grid"></div>
+  <div id="sticker-container"></div>
+  <p class="message" id="message"></p>
+
+  <a id="claim-btn" class="claim-btn hidden" href="https://t.me/Fedexpackage_bot?start=claim">
+    🏆 Réclamer mon lot
+  </a>
+  <p id="claim-hint" class="claim-hint hidden">
+    Cliquez ci-dessus pour réclamer votre lot
+  </p>
+</div>
+
+<script>
+const tg = window.Telegram.WebApp;
+tg.ready();
+tg.expand();
+
+const params = new URLSearchParams(window.location.search);
+const langFromUrl = params.get("lang") || "en";
+
+const initData = tg.initData;
+
+console.log("initData length:", initData ? initData.length : 0);
+
+const TEXTS = {
+  fr: {
+    register_title: "📝 Inscription",
+    register_subtitle: "Remplissez vos informations pour commencer.",
+    register_nom: "Nom complet",
+    register_tel: "Téléphone",
+    register_adresse: "Adresse",
+    register_email: "Email",
+    register_submit: "Commencer le jeu",
+    register_loading: "Vérification...",
+    title: "🎁 Trouvez une case gagnante !",
+    loading: "⏳ Chargement...",
+    error: "❌ Erreur",
+    claim_button: "🏆 Réclamer mon lot",
+    claim_hint: "Cliquez ci-dessus pour réclamer votre lot"
+  },
+  en: {
+    register_title: "📝 Registration",
+    register_subtitle: "Fill in your information to start.",
+    register_nom: "Full name",
+    register_tel: "Phone",
+    register_adresse: "Address",
+    register_email: "Email",
+    register_submit: "Start the game",
+    register_loading: "Verifying...",
+    title: "🎁 Find a winning box!",
+    loading: "⏳ Loading...",
+    error: "❌ Error",
+    claim_button: "🏆 Claim my prize",
+    claim_hint: "Click above to claim your prize"
+  },
+  ar: {
+    register_title: "📝 التسجيل",
+    register_subtitle: "املأ معلوماتك للبدء.",
+    register_nom: "الاسم الكامل",
+    register_tel: "الهاتف",
+    register_adresse: "العنوان",
+    register_email: "البريد الإلكتروني",
+    register_submit: "ابدأ اللعبة",
+    register_loading: "جار التحقق...",
+    title: "🎁 اعثر على صندوق فائز!",
+    loading: "⏳ جار التحميل...",
+    error: "❌ خطأ",
+    claim_button: "🏆 المطالبة بجائزتي",
+    claim_hint: "انقر أعلاه للمطالبة بجائزتك"
+  },
+  pt: {
+    register_title: "📝 Registro",
+    register_subtitle: "Preencha suas informações para começar.",
+    register_nom: "Nome completo",
+    register_tel: "Telefone",
+    register_adresse: "Endereço",
+    register_email: "Email",
+    register_submit: "Começar o jogo",
+    register_loading: "Verificando...",
+    title: "🎁 Encontre uma caixa vencedora!",
+    loading: "⏳ Carregando...",
+    error: "❌ Erro",
+    claim_button: "🏆 Reclamar meu prêmio",
+    claim_hint: "Clique acima para reclamar seu prêmio"
+  },
+  es: {
+    register_title: "📝 Registro",
+    register_subtitle: "Rellena tus datos para comenzar.",
+    register_nom: "Nombre completo",
+    register_tel: "Teléfono",
+    register_adresse: "Dirección",
+    register_email: "Correo electrónico",
+    register_submit: "Comenzar el juego",
+    register_loading: "Verificando...",
+    title: "🎁 ¡Encuentra una casilla ganadora!",
+    loading: "⏳ Cargando...",
+    error: "❌ Error",
+    claim_button: "🏆 Reclamar mi premio",
+    claim_hint: "Haz clic arriba para reclamar tu premio"
+  }
+};
+
+const txt = TEXTS[langFromUrl] || TEXTS.en;
+
+document.getElementById("loading").textContent = txt.loading;
+document.getElementById("register-title").textContent = txt.register_title;
+document.getElementById("register-subtitle").textContent = txt.register_subtitle;
+document.getElementById("label-nom").textContent = txt.register_nom;
+document.getElementById("label-tel").textContent = txt.register_tel;
+document.getElementById("label-adresse").textContent = txt.register_adresse;
+document.getElementById("label-email").textContent = txt.register_email;
+document.getElementById("register-btn").textContent = txt.register_submit;
+document.getElementById("title").textContent = txt.title;
+document.getElementById("claim-btn").textContent = txt.claim_button;
+document.getElementById("claim-hint").textContent = txt.claim_hint;
+
+function showRegister() {
+  document.getElementById("loading").classList.add("hidden");
+  document.getElementById("register-section").classList.remove("hidden");
+}
+
+async function submitRegister() {
+  const nom = document.getElementById("input-nom").value.trim();
+  const tel = document.getElementById("input-tel").value.trim();
+  const adresse = document.getElementById("input-adresse").value.trim();
+  const email = document.getElementById("input-email").value.trim();
+
+  const btn = document.getElementById("register-btn");
+  const errorDiv = document.getElementById("register-error");
+
+  errorDiv.textContent = "";
+
+  if (!nom || nom.length < 2) { errorDiv.textContent = "Nom invalide."; return; }
+  if (!tel) { errorDiv.textContent = "Veuillez entrer un numéro."; return; }
+  if (!adresse || adresse.length < 3) { errorDiv.textContent = "Adresse invalide."; return; }
+  if (!email || !email.includes("@")) { errorDiv.textContent = "Email invalide."; return; }
+
+  btn.disabled = true;
+  btn.textContent = txt.register_loading;
+
+  try {
+    const res = await fetch("/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        initData: initData,
+        nom_complet: nom,
+        telephone: tel,
+        adresse: adresse,
+        email: email
+      })
+    });
+
+    const data = await res.json();
+
+    if (!data.ok) {
+      errorDiv.textContent = data.message || "Erreur";
+      btn.disabled = false;
+      btn.textContent = txt.register_submit;
+      return;
+    }
+
+    await startGame();
+
+  } catch (e) {
+    console.error(e);
+    errorDiv.textContent = "Erreur reseau";
+    btn.disabled = false;
+    btn.textContent = txt.register_submit;
+  }
+}
+
+document.getElementById("register-btn").addEventListener("click", submitRegister);
+
+async function startGame() {
+  try {
+    const res = await fetch("/api/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ initData: initData })
+    });
+    const data = await res.json();
+
+    if (!data.ok) {
+      document.getElementById("register-section").classList.add("hidden");
+      document.getElementById("loading").classList.remove("hidden");
+      document.getElementById("loading").innerHTML =
+        txt.error + " : " + (data.message || "Erreur");
+      return;
+    }
+
+    document.getElementById("register-section").classList.add("hidden");
+    document.getElementById("loading").classList.add("hidden");
+    document.getElementById("game").classList.remove("hidden");
+
+    if (data.choose_case) {
+      document.getElementById("info").textContent = data.choose_case;
+    }
+    if (data.tries_left_text) {
+      document.getElementById("info").textContent +=
+        " (" + data.tries_left_text + ")";
+    }
+
+    buildGrid();
+  } catch (e) {
+    console.error(e);
+    document.getElementById("loading").innerHTML = txt.error + " reseau";
+  }
+}
+
+function buildGrid() {
+  const grid = document.getElementById("grid");
+  grid.innerHTML = "";
+  for (let i = 0; i < 12; i++) {
+    const btn = document.createElement("button");
+    btn.className = "case";
+    btn.textContent = i + 1;
+    btn.onclick = () => playCase(i, btn);
+    grid.appendChild(btn);
+  }
+}
+
+async function playCase(index, btn) {
+  btn.disabled = true;
+
+  try {
+    const res = await fetch("/api/choose", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ initData: initData, case: index })
+    });
+    const data = await res.json();
+
+    if (!data.ok) {
+      btn.disabled = false;
+      alert(data.message || "Erreur");
+      return;
+    }
+
+    // ---------- CAS 1 : LE JOUEUR GAGNE ----------
+    if (data.resultat === "gagne") {
+      btn.classList.add("win");
+      showSticker("🎉");
+      document.getElementById("message").textContent = data.message;
+      disableAll();
+
+      // ✅ AFFICHER LE BOUTON "RÉCLAMER" UNIQUEMENT ICI
+      document.getElementById("claim-btn").classList.remove("hidden");
+      document.getElementById("claim-hint").classList.remove("hidden");
+    }
+
+    // ---------- CAS 2 : LE JOUEUR PERD DÉFINITIVEMENT ----------
+    else if (data.resultat === "perdu") {
+      btn.classList.add("lose");
+      showSticker("😢");
+      document.getElementById("message").textContent = data.message;
+      disableAll();
+      revealWinning(data.winning || []);
+
+      // ❌ PAS DE BOUTON ICI
+    }
+
+    // ---------- CAS 3 : LE JOUEUR CONTINUE (essais restants) ----------
+    else {
+      btn.classList.add("lose");
+      showSticker("😢", 1200);
+      document.getElementById("message").textContent = data.message;
+
+      // ❌ PAS DE BOUTON ICI
+    }
+  } catch (e) {
+    console.error(e);
+    btn.disabled = false;
+    alert("Erreur reseau");
+  }
+}
+
+function showSticker(emoji, timeout) {
+  const container = document.getElementById("sticker-container");
+  container.innerHTML = '<div class="sticker">' + emoji + '</div>';
+  if (timeout) {
+    setTimeout(function() { container.innerHTML = ""; }, timeout);
+  }
+}
+
+function disableAll() {
+  document.querySelectorAll(".case").forEach(function(b) { b.disabled = true; });
+}
+
+function revealWinning(list) {
+  list.forEach(function(n) {
+    var btn = document.querySelectorAll(".case")[n - 1];
+    if (btn) btn.classList.add("win");
+  });
+}
+
+showRegister();
+</script>
+</body>
+</html>
